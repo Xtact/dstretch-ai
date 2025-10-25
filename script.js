@@ -573,19 +573,32 @@ document.addEventListener('DOMContentLoaded', () => {
     async function toggleVideo() {
         if (!videoStream) {
             try {
-                videoStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-                });
+                // Simplified constraints for better compatibility
+                const constraints = {
+                    video: {
+                        facingMode: 'environment'
+                    }
+                };
+                
+                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
                 videoElement.srcObject = videoStream;
                 videoElement.classList.add('active');
-                startVideoBtn.textContent = 'Stop Camera';
+                
+                // Update button text
+                const btnText = startVideoBtn.querySelector('span');
+                if (btnText) btnText.textContent = 'Stop Camera';
+                
                 captureFrameBtn.disabled = false;
                 
-                if (liveEnhanceToggle.checked) {
-                    startLiveProcessing();
-                }
+                // Wait for video to be ready
+                videoElement.onloadedmetadata = () => {
+                    if (liveEnhanceToggle.checked) {
+                        startLiveProcessing();
+                    }
+                };
             } catch (err) {
-                alert('Could not access camera: ' + err.message);
+                console.error('Camera error:', err);
+                alert('Could not access camera. Please make sure:\n1. You granted camera permission\n2. Your browser supports camera access\n3. The site is using HTTPS');
             }
         } else {
             stopVideo();
