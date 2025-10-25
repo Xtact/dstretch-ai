@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>DStretch AI Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.7.0/math.min.js" defer></script>
+    <script src="worker.js" defer></script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <button class="header-btn" id="cancel-btn">Cancel</button>
+            <div class="history-controls">
+                <button class="icon-btn" id="undo-btn" disabled>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 7v6h6"></path>
+                        <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"></path>
+                    </svg>
+                </button>
+                <button class="icon-btn" id="redo-btn" disabled>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 7v6h-6"></path>
+                        <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"></path>
+                    </svg>
+                </button>
+            </div>
+            <span class="header-title">DStretch AI Pro</span>
+            <button class="icon-btn" id="menu-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="1"></circle>
+                    <circle cx="12" cy="5" r="1"></circle>
+                    <circle cx="12" cy="19" r="1"></circle>
+                </svg>
+            </button>
+        </header>
+
+        <main class="image-workspace">
+            <div class="image-container">
+                <canvas id="canvas"></canvas>
+                <img id="imageDisplay" alt="Tap to upload an image">
+                <div class="comparison-indicator">Release to return</div>
+                <div class="processing-overlay">
+                    <div class="spinner"></div>
+                    <span>Processing...</span>
+                </div>
+            </div>
+        </main>
+
+        <footer class="app-footer">
+            <div id="colorspace-panel" class="control-panel active">
+                <div class="panel-header">
+                    <span>Enhancement Mode</span>
+                    <button class="reset-panel-btn" data-panel="colorspace">Reset</button>
+                </div>
+                <div class="carousel">
+                    <button class="cs-btn active" data-colorspace="RGB">RGB</button>
+                    <button class="cs-btn" data-colorspace="LAB">LAB</button>
+                    <button class="cs-btn" data-colorspace="YRE">YRE</button>
+                    <button class="cs-btn" data-colorspace="LRE">LRE</button>
+                    <button class="cs-btn" data-colorspace="CRGB">CRGB</button>
+                    <button class="cs-btn" data-colorspace="YBK">YBK</button>
+                </div>
+                <div class="slider-container">
+                    <div class="slider-header">
+                        <label for="stretch">Stretch</label>
+                        <span class="slider-value" id="stretch-value">50</span>
+                    </div>
+                    <input type="range" id="stretch" min="1" max="100" value="50">
+                </div>
+            </div>
+
+            <div id="adjust-panel" class="control-panel">
+                <div class="panel-header">
+                    <span>Adjustments</span>
+                    <button class="reset-panel-btn" data-panel="adjust">Reset All</button>
+                </div>
+                <div class="slider-grid">
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <label for="exposure">Exposure</label>
+                            <span class="slider-value" id="exposure-value">0</span>
+                        </div>
+                        <input type="range" id="exposure" min="-100" max="100" value="0">
+                    </div>
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <label for="shadows">Shadows</label>
+                            <span class="slider-value" id="shadows-value">0</span>
+                        </div>
+                        <input type="range" id="shadows" min="0" max="100" value="0">
+                    </div>
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <label for="brightness">Brightness</label>
+                            <span class="slider-value" id="brightness-value">0</span>
+                        </div>
+                        <input type="range" id="brightness" min="-100" max="100" value="0">
+                    </div>
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <label for="contrast">Contrast</label>
+                            <span class="slider-value" id="contrast-value">0</span>
+                        </div>
+                        <input type="range" id="contrast" min="-100" max="100" value="0">
+                    </div>
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <label for="blackPoint">Black Point</label>
+                            <span class="slider-value" id="blackPoint-value">0</span>
+                        </div>
+                        <input type="range" id="blackPoint" min="0" max="50" value="0">
+                    </div>
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <label for="saturation">Saturation</label>
+                            <span class="slider-value" id="saturation-value">0</span>
+                        </div>
+                        <input type="range" id="saturation" min="-100" max="100" value="0">
+                    </div>
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <label for="sharpen">Sharpen</label>
+                            <span class="slider-value" id="sharpen-value">0</span>
+                        </div>
+                        <input type="range" id="sharpen" min="0" max="100" value="0">
+                    </div>
+                </div>
+            </div>
+
+            <div id="ai-panel" class="control-panel">
+                <div class="panel-header">
+                    <span>AI Tools</span>
+                </div>
+                <div class="ai-tools-grid">
+                    <button class="ai-tool-btn" id="super-res-btn">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                            <path d="M7 7h10v10H7z"></path>
+                        </svg>
+                        <span>Super Resolution</span>
+                        <small>Coming Soon</small>
+                    </button>
+                    <button class="ai-tool-btn" id="auto-enhance-btn">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"></path>
+                        </svg>
+                        <span>Auto Enhance</span>
+                        <small>AI-powered enhancement</small>
+                    </button>
+                </div>
+            </div>
+
+            <div id="video-panel" class="control-panel">
+                <div class="panel-header">
+                    <span>Live Video</span>
+                </div>
+                <div class="video-controls">
+                    <button class="video-btn" id="start-video-btn">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 7l-7 5 7 5V7z"></path>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                        </svg>
+                        <span>Start Camera</span>
+                    </button>
+                    <button class="video-btn" id="capture-frame-btn" disabled>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"></path>
+                            <circle cx="12" cy="13" r="4"></circle>
+                        </svg>
+                        <span>Capture Frame</span>
+                    </button>
+                </div>
+                <div class="video-settings">
+                    <label class="toggle-setting">
+                        <input type="checkbox" id="live-enhance-toggle">
+                        <span>Live Enhancement</span>
+                    </label>
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <label for="video-stretch">Enhancement Strength</label>
+                            <span class="slider-value" id="video-stretch-value">50</span>
+                        </div>
+                        <input type="range" id="video-stretch" min="1" max="100" value="50">
+                    </div>
+                </div>
+                <video id="videoElement" autoplay playsinline></video>
+                <canvas id="videoCanvas"></canvas>
+            </div>
+
+            <nav class="main-nav">
+                <button class="nav-tab active" data-panel="colorspace-panel">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M12 2a10 10 0 00-10 10"></path>
+                    </svg>
+                    <span>Enhance</span>
+                </button>
+                <button class="nav-tab" data-panel="adjust-panel">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <span>Adjust</span>
+                </button>
+                <button class="nav-tab" data-panel="ai-panel">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"></path>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                    <span>AI Tools</span>
+                </button>
+                <button class="nav-tab" data-panel="video-panel">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 7l-7 5 7 5V7z"></path>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                    </svg>
+                    <span>Live</span>
+                </button>
+            </nav>
+        </footer>
+
+        <!-- Menu Modal -->
+        <div class="modal" id="menu-modal">
+            <div class="modal-content">
+                <button class="modal-close" id="close-menu">×</button>
+                <h3>Options</h3>
+                <button class="modal-btn" id="download-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download Image
+                </button>
+                <button class="modal-btn" id="reset-all-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"></path>
+                    </svg>
+                    Reset All
+                </button>
+                <button class="modal-btn" id="new-image-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                    Load New Image
+                </button>
+            </div>
+        </div>
+        
+        <input type="file" id="imageLoader" accept="image/*" style="display: none;">
+    </div>
+</body>
+</html>
