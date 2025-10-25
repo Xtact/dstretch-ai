@@ -165,13 +165,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
         
         // Slider updates
-        const debouncedProcess = debounce((isNewState) => processImage(isNewState), 150);
+        const debouncedProcess = debounce((isNewState) => {
+            if (originalImageSrc) processImage(isNewState);
+        }, 150);
         
         allSliders.forEach(slider => {
             updateSliderValue(slider);
             slider.addEventListener('input', () => {
                 updateSliderValue(slider);
-                if (originalImageSrc) {
+                if (originalImageSrc && slider.id !== 'video-stretch') {
                     debouncedProcess(slider.id === 'stretch');
                 }
             });
@@ -583,6 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 videoStream = await navigator.mediaDevices.getUserMedia(constraints);
                 videoElement.srcObject = videoStream;
                 videoElement.classList.add('active');
+                imageDisplay.classList.add('hidden');
                 
                 // Update button text
                 const btnText = startVideoBtn.querySelector('span');
@@ -610,7 +613,9 @@ document.addEventListener('DOMContentLoaded', () => {
             videoStream.getTracks().forEach(track => track.stop());
             videoStream = null;
             videoElement.classList.remove('active');
+            videoCanvas.classList.remove('active');
             videoElement.srcObject = null;
+            imageDisplay.classList.remove('hidden');
             
             // Update button text
             const btnText = startVideoBtn.querySelector('span');
