@@ -140,6 +140,11 @@ canvas {
     -webkit-user-select: none;
     touch-action: none;
     transition: opacity 0.15s ease-out;
+    display: block;
+}
+
+#imageDisplay.hidden {
+    display: none;
 }
 
 #imageDisplay.comparing {
