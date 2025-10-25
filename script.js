@@ -611,7 +611,11 @@ document.addEventListener('DOMContentLoaded', () => {
             videoStream = null;
             videoElement.classList.remove('active');
             videoElement.srcObject = null;
-            startVideoBtn.textContent = 'Start Camera';
+            
+            // Update button text
+            const btnText = startVideoBtn.querySelector('span');
+            if (btnText) btnText.textContent = 'Start Camera';
+            
             captureFrameBtn.disabled = true;
             stopLiveProcessing();
         }
@@ -634,25 +638,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            videoCanvas.width = videoElement.videoWidth;
-            videoCanvas.height = videoElement.videoHeight;
-            videoCtx.drawImage(videoElement, 0, 0);
+            // Make sure video is ready
+            if (videoElement.readyState < 2) {
+                videoAnimationFrame = requestAnimationFrame(processFrame);
+                return;
+            }
             
-            const imageData = videoCtx.getImageData(0, 0, videoCanvas.width, videoCanvas.height);
-            const pixels = imageData.data;
-            
-            // Apply quick enhancement
-            const stretchAmount = parseFloat(videoStretchSlider.value);
-            applyQuickEnhancement(pixels, stretchAmount);
-            
-            videoCtx.putImageData(imageData, 0, 0);
-            videoElement.style.display = 'none';
-            videoCanvas.style.display = 'block';
-            videoCanvas.style.width = '100%';
-            videoCanvas.style.maxHeight = '150px';
-            videoCanvas.style.objectFit = 'cover';
-            videoCanvas.style.borderRadius = '12px';
-            videoCanvas.style.marginTop = '12px';
+            try {
+                videoCanvas.width = videoElement.videoWidth;
+                videoCanvas.height = videoElement.videoHeight;
+                
+                if (videoCanvas.width > 0 && videoCanvas.height > 0) {
+                    videoCtx.drawImage(videoElement, 0, 0);
+                    
+                    const imageData = videoCtx.getImageData(0, 0, videoCanvas.width, videoCanvas.height);
+                    const pixels = imageData.data;
+                    
+                    // Apply quick enhancement
+                    const stretchAmount = parseFloat(videoStretchSlider.value);
+                    applyQuickEnhancement(pixels, stretchAmount);
+                    
+                    videoCtx.putImageData(imageData, 0, 0);
+                    videoElement.style.display = 'none';
+                    videoCanvas.style.display = 'block';
+                    videoCanvas.style.width = '100%';
+                    videoCanvas.style.maxHeight = '150px';
+                    videoCanvas.style.objectFit = 'cover';
+                    videoCanvas.style.borderRadius = '12px';
+                    videoCanvas.style.marginTop = '12px';
+                }
+            } catch (err) {
+                console.error('Frame processing error:', err);
+            }
             
             videoAnimationFrame = requestAnimationFrame(processFrame);
         };
@@ -691,25 +708,42 @@ document.addEventListener('DOMContentLoaded', () => {
     function captureVideoFrame() {
         if (!videoStream) return;
         
-        const captureCanvas = document.createElement('canvas');
-        captureCanvas.width = videoElement.videoWidth;
-        captureCanvas.height = videoElement.videoHeight;
-        const captureCtx = captureCanvas.getContext('2d');
-        captureCtx.drawImage(videoElement, 0, 0);
-        
-        originalImageSrc = captureCanvas.toDataURL('image/png');
-        history = [originalImageSrc];
-        historyIndex = 0;
-        updateUndoRedoButtons();
-        
-        // Switch to enhance tab
-        navTabs[0].click();
-        
-        // Stop video
-        stopVideo();
-        
-        // Process captured frame
-        processImage(true);
+        try {
+            // Make sure video is ready
+            if (videoElement.readyState < 2) {
+                alert('Video not ready yet. Please wait a moment.');
+                return;
+            }
+            
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = videoElement.videoWidth;
+            captureCanvas.height = videoElement.videoHeight;
+            
+            if (captureCanvas.width === 0 || captureCanvas.height === 0) {
+                alert('Could not capture frame. Please try again.');
+                return;
+            }
+            
+            const captureCtx = captureCanvas.getContext('2d');
+            captureCtx.drawImage(videoElement, 0, 0);
+            
+            originalImageSrc = captureCanvas.toDataURL('image/png');
+            history = [originalImageSrc];
+            historyIndex = 0;
+            updateUndoRedoButtons();
+            
+            // Switch to enhance tab
+            navTabs[0].click();
+            
+            // Stop video
+            stopVideo();
+            
+            // Process captured frame
+            processImage(true);
+        } catch (err) {
+            console.error('Capture error:', err);
+            alert('Could not capture frame: ' + err.message);
+        }
     }
     
     function downloadImage() {
