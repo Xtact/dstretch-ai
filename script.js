@@ -236,9 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         // AI Tools
-        superResBtn.addEventListener('click', () => {
-            alert('Super Resolution coming soon! This feature will use AI to enhance image quality and increase resolution.');
-        });
+        superResBtn.addEventListener('click', handleSuperResolution);
         
         autoEnhanceBtn.addEventListener('click', autoEnhance);
         
@@ -503,6 +501,260 @@ document.addEventListener('DOMContentLoaded', () => {
         return finalPixelData;
     }
     
+    // === SUPER RESOLUTION (AI-POWERED) ===
+    async function handleSuperResolution() {
+        if (!originalImageSrc) {
+            alert('Please load an image first');
+            return;
+        }
+        
+        const confirmUpscale = confirm('Super Resolution uses AI to enhance and upscale your image.\n\nThis may take 10-30 seconds depending on image size.\n\nContinue?');
+        if (!confirmUpscale) return;
+        
+        showProcessing();
+        
+        try {
+            // Convert current image to base64
+            const base64Data = originalImageSrc.split(',')[1];
+            
+            // Call Claude API for super resolution via Netlify function
+            const response = await fetch('/.netlify/functions/super-res', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 1024,
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'image',
+                                source: {
+                                    type: 'base64',
+                                    media_type: 'image/png',
+                                    data: base64Data
+                                }
+                            },
+                            {
+                                type: 'text',
+                                text: `Analyze this image and provide detailed enhancement recommendations for super-resolution upscaling. Focus on:
+1. Key details that should be preserved or enhanced
+2. Texture patterns and grain
+3. Edge sharpness recommendations
+4. Color accuracy adjustments
+5. Noise reduction suggestions
+
+Provide your response as a JSON object with these exact fields:
+{
+  "sharpness": <number 0-100>,
+  "denoiseStrength": <number 0-100>,
+  "detailEnhancement": <number 0-100>,
+  "edgePreservation": <number 0-100>,
+  "colorBoost": <number 0-100>,
+  "recommendedScale": <number 1.5-4.0>,
+  "analysis": "<brief description of image quality>"
+}
+
+Return ONLY the JSON object, no other text.`
+                            }
+                        ]
+                    }]
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const aiResponse = data.content.find(item => item.type === 'text')?.text || '';
+            
+            // Parse AI recommendations
+            let recommendations;
+            try {
+                const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    recommendations = JSON.parse(jsonMatch[0]);
+                } else {
+                    throw new Error('No JSON found in response');
+                }
+            } catch (e) {
+                // Fallback to smart defaults
+                recommendations = {
+                    sharpness: 70,
+                    denoiseStrength: 30,
+                    detailEnhancement: 80,
+                    edgePreservation: 85,
+                    colorBoost: 40,
+                    recommendedScale: 2.0,
+                    analysis: 'Using default enhancement settings'
+                };
+            }
+            
+            // Apply super resolution with AI recommendations
+            await applySuperResolution(recommendations);
+            
+            hideProcessing();
+            alert(`Super Resolution Complete!\n\nAI Analysis: ${recommendations.analysis}\n\nImage upscaled ${recommendations.recommendedScale}x with intelligent enhancement.`);
+            
+        } catch (error) {
+            console.error('Super Resolution error:', error);
+            hideProcessing();
+            
+            // Fallback to basic upscaling
+            const useFallback = confirm('AI service unavailable. Use basic upscaling instead?\n\n(Image will be doubled in size with sharpening)');
+            if (useFallback) {
+                showProcessing();
+                await applySuperResolution({
+                    sharpness: 75,
+                    denoiseStrength: 20,
+                    detailEnhancement: 60,
+                    edgePreservation: 80,
+                    colorBoost: 30,
+                    recommendedScale: 2.0,
+                    analysis: 'Basic upscaling'
+                });
+                hideProcessing();
+                alert('Basic super resolution applied! Image doubled in size.');
+            }
+        }
+    }
+    
+    async function applySuperResolution(recommendations) {
+        return new Promise((resolve) => {
+            const sourceImg = new Image();
+            sourceImg.onload = () => {
+                const scale = recommendations.recommendedScale || 2.0;
+                const newWidth = Math.floor(sourceImg.naturalWidth * scale);
+                const newHeight = Math.floor(sourceImg.naturalHeight * scale);
+                
+                // Create temporary canvas for upscaling
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = newWidth;
+                tempCanvas.height = newHeight;
+                const tempCtx = tempCanvas.getContext('2d', { 
+                    imageSmoothingEnabled: true,
+                    imageSmoothingQuality: 'high'
+                });
+                
+                // Use bicubic-like interpolation
+                tempCtx.imageSmoothingEnabled = true;
+                tempCtx.imageSmoothingQuality = 'high';
+                tempCtx.drawImage(sourceImg, 0, 0, newWidth, newHeight);
+                
+                // Get pixel data for enhancement
+                const imageData = tempCtx.getImageData(0, 0, newWidth, newHeight);
+                const pixels = imageData.data;
+                
+                // Apply AI-recommended enhancements
+                enhancePixels(pixels, recommendations);
+                
+                // Apply sharpening based on AI recommendation
+                if (recommendations.sharpness > 0) {
+                    applyAdvancedSharpen(pixels, newWidth, newHeight, recommendations.sharpness / 100);
+                }
+                
+                tempCtx.putImageData(imageData, 0, 0);
+                
+                // Update original image
+                originalImageSrc = tempCanvas.toDataURL('image/png', 0.95);
+                history = [originalImageSrc];
+                historyIndex = 0;
+                updateUndoRedoButtons();
+                
+                // Process with current settings
+                processImage(true);
+                resolve();
+            };
+            sourceImg.src = originalImageSrc;
+        });
+    }
+    
+    function enhancePixels(pixels, recommendations) {
+        const denoise = recommendations.denoiseStrength / 100;
+        const detail = recommendations.detailEnhancement / 100;
+        const colorBoost = recommendations.colorBoost / 100;
+        
+        for (let i = 0; i < pixels.length; i += 4) {
+            let r = pixels[i];
+            let g = pixels[i + 1];
+            let b = pixels[i + 2];
+            
+            // Detail enhancement (micro-contrast)
+            if (detail > 0) {
+                const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+                const localContrast = 1 + (detail * 0.3);
+                r = luma + (r - luma) * localContrast;
+                g = luma + (g - luma) * localContrast;
+                b = luma + (b - luma) * localContrast;
+            }
+            
+            // Color boost
+            if (colorBoost > 0) {
+                const avg = (r + g + b) / 3;
+                r = avg + (r - avg) * (1 + colorBoost * 0.5);
+                g = avg + (g - avg) * (1 + colorBoost * 0.5);
+                b = avg + (b - avg) * (1 + colorBoost * 0.5);
+            }
+            
+            // Denoise (subtle smoothing)
+            if (denoise > 0) {
+                const smoothFactor = 1 - (denoise * 0.2);
+                const targetLuma = 0.299 * r + 0.587 * g + 0.114 * b;
+                r = r * smoothFactor + targetLuma * (1 - smoothFactor) * (r / (targetLuma || 1));
+                g = g * smoothFactor + targetLuma * (1 - smoothFactor) * (g / (targetLuma || 1));
+                b = b * smoothFactor + targetLuma * (1 - smoothFactor) * (b / (targetLuma || 1));
+            }
+            
+            pixels[i] = Math.max(0, Math.min(255, r));
+            pixels[i + 1] = Math.max(0, Math.min(255, g));
+            pixels[i + 2] = Math.max(0, Math.min(255, b));
+        }
+    }
+    
+    function applyAdvancedSharpen(pixels, width, height, amount) {
+        // Unsharp mask technique
+        const kernel = [
+            -1, -1, -1,
+            -1,  9, -1,
+            -1, -1, -1
+        ];
+        
+        const output = new Uint8ClampedArray(pixels.length);
+        const side = 3;
+        const halfSide = 1;
+        
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const dstOff = (y * width + x) * 4;
+                let r = 0, g = 0, b = 0;
+                
+                for (let cy = 0; cy < side; cy++) {
+                    for (let cx = 0; cx < side; cx++) {
+                        const scy = Math.min(height - 1, Math.max(0, y + cy - halfSide));
+                        const scx = Math.min(width - 1, Math.max(0, x + cx - halfSide));
+                        const srcOff = (scy * width + scx) * 4;
+                        const wt = kernel[cy * side + cx];
+                        
+                        r += pixels[srcOff] * wt;
+                        g += pixels[srcOff + 1] * wt;
+                        b += pixels[srcOff + 2] * wt;
+                    }
+                }
+                
+                // Blend sharpened with original based on amount
+                output[dstOff] = pixels[dstOff] + (r - pixels[dstOff]) * amount;
+                output[dstOff + 1] = pixels[dstOff + 1] + (g - pixels[dstOff + 1]) * amount;
+                output[dstOff + 2] = pixels[dstOff + 2] + (b - pixels[dstOff + 2]) * amount;
+                output[dstOff + 3] = pixels[dstOff + 3];
+            }
+        }
+        
+        pixels.set(output);
+    }
+    
     // === AUTO ENHANCE (AI-POWERED) ===
     function autoEnhance() {
         if (!originalImageSrc) {
@@ -664,13 +916,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     applyQuickEnhancement(pixels, stretchAmount);
                     
                     videoCtx.putImageData(imageData, 0, 0);
-                    videoElement.style.display = 'none';
-                    videoCanvas.style.display = 'block';
-                    videoCanvas.style.width = '100%';
-                    videoCanvas.style.maxHeight = '150px';
-                    videoCanvas.style.objectFit = 'cover';
-                    videoCanvas.style.borderRadius = '12px';
-                    videoCanvas.style.marginTop = '12px';
+                    videoElement.classList.remove('active');
+                    videoCanvas.classList.add('active');
                 }
             } catch (err) {
                 console.error('Frame processing error:', err);
@@ -686,8 +933,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (videoAnimationFrame) {
             cancelAnimationFrame(videoAnimationFrame);
             videoAnimationFrame = null;
-            videoCanvas.style.display = 'none';
-            videoElement.style.display = 'block';
+            videoCanvas.classList.remove('active');
+            if (videoStream) {
+                videoElement.classList.add('active');
+            }
         }
     }
     
