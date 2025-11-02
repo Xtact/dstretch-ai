@@ -1,0 +1,21 @@
+# Netlify configuration file
+
+[build]
+  # Publish directory (your static files)
+  publish = "."
+  
+  # Functions directory
+  functions = "netlify/functions"
+
+[functions]
+  # Set the directory for your serverless functions
+  directory = "netlify/functions"
+
+# Redirect rules (optional)
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Environment variables (set these in Netlify UI)
+# ANTHROPIC_API_KEY = "your-api-key-here"
