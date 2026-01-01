@@ -146,16 +146,34 @@ document.addEventListener('DOMContentLoaded', () => {
         initWorker();
         
         // Navigation tabs
-        navTabs.forEach(tab => tab.addEventListener('click', () => {
-            navTabs.forEach(t => t.classList.remove('active'));
-            controlPanels.forEach(p => p.classList.remove('active'));
-            tab.classList.add('active');
-            document.getElementById(tab.dataset.panel).classList.add('active');
-        }));
+        navTabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const panelId = tab.dataset.panel;
+                console.log('Tab clicked:', panelId); // Debug log
+                
+                // Remove active from all tabs and panels
+                navTabs.forEach(t => t.classList.remove('active'));
+                controlPanels.forEach(p => p.classList.remove('active'));
+                
+                // Add active to clicked tab
+                tab.classList.add('active');
+                
+                // Show corresponding panel
+                const targetPanel = document.getElementById(panelId);
+                if (targetPanel) {
+                    targetPanel.classList.add('active');
+                } else {
+                    console.error('Panel not found:', panelId);
+                }
+            });
+        });
         
         // Image upload
         imageDisplay.addEventListener('click', () => { 
-            if (!originalImageSrc) imageLoader.click(); 
+            imageLoader.click(); 
         });
         imageLoader.addEventListener('change', handleImageUpload);
         
