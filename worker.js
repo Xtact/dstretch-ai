@@ -1,4 +1,4 @@
-// Web Worker for DStretch processing
+    // Web Worker for DStretch processing
 // This offloads heavy computation from the main thread
 
 self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.7.0/math.min.js');
@@ -130,8 +130,6 @@ function convertRgbTo(r, g, b, colorspace) {
     switch (colorspace) {
         case 'LAB':
             return rgbToLab(r, g, b);
-        case 'LCH':
-            return rgbToLch(r, g, b);
         case 'YRE':
             return [0.299 * r + 0.587 * g + 0.114 * b, r, g];
         case 'LRE':
@@ -150,9 +148,6 @@ function convertToRgb(c1, c2, c3, colorspace) {
     switch (colorspace) {
         case 'LAB':
             rgb = labToRgb(c1, c2, c3);
-            break;
-        case 'LCH':
-            rgb = lchToRgb(c1, c2, c3);
             break;
         case 'YRE':
             rgb = [c2, c3, (c1 - 0.587 * c3 - 0.299 * c2) / 0.114];
@@ -239,29 +234,4 @@ function labToRgb(l, a, b_lab) {
     b = b > 0.0031308 ? 1.055 * Math.pow(b, 1 / 2.4) - 0.055 : 12.92 * b;
     
     return [r * 255, g * 255, b * 255];
-}
-
-function rgbToLch(r, g, b) {
-    // Convert RGB to LAB first
-    const lab = rgbToLab(r, g, b);
-    const L = lab[0];
-    const a = lab[1];
-    const b_lab = lab[2];
-    
-    // Convert LAB to LCH (cylindrical representation)
-    const C = Math.sqrt(a * a + b_lab * b_lab);
-    let H = Math.atan2(b_lab, a) * (180 / Math.PI);
-    if (H < 0) H += 360;
-    
-    return [L, C, H];
-}
-
-function lchToRgb(L, C, H) {
-    // Convert LCH to LAB
-    const H_rad = H * (Math.PI / 180);
-    const a = C * Math.cos(H_rad);
-    const b_lab = C * Math.sin(H_rad);
-    
-    // Convert LAB to RGB
-    return labToRgb(L, a, b_lab);
 }
