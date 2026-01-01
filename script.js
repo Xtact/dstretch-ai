@@ -17,6 +17,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // All Sliders
     const allSliders = document.querySelectorAll('input[type="range"]');
     const stretchSlider = document.getElementById('stretch');
+    const decorrelationSlider = document.getElementById('decorrelation');
+    
+    // Advanced sliders
+    const lightAngleSlider = document.getElementById('lightAngle');
+    const edgeStrengthSlider = document.getElementById('edgeStrength');
+    const edgeThicknessSlider = document.getElementById('edgeThickness');
+    const normalStrengthSlider = document.getElementById('normalStrength');
+    const radianceScaleSlider = document.getElementById('radianceScale');
+    const directionalSharpSlider = document.getElementById('directionalSharp');
+    
+    // Toggles
+    const enableEdges = document.getElementById('enable-edges');
+    const enableNormals = document.getElementById('enable-normals');
+    const enableICA = document.getElementById('enable-ica');
     
     // Navigation
     const navTabs = document.querySelectorAll('.nav-tab');
@@ -30,19 +44,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const menuModal = document.getElementById('menu-modal');
     const closeMenuBtn = document.getElementById('close-menu');
     
-    // AI Tools
-    const superResBtn = document.getElementById('super-res-btn');
-    const autoEnhanceBtn = document.getElementById('auto-enhance-btn');
-    
-    // Video elements
-    const videoElement = document.getElementById('videoElement');
-    const videoCanvas = document.getElementById('videoCanvas');
-    const videoCtx = videoCanvas.getContext('2d');
-    const startVideoBtn = document.getElementById('start-video-btn');
-    const captureFrameBtn = document.getElementById('capture-frame-btn');
-    const liveEnhanceToggle = document.getElementById('live-enhance-toggle');
-    const videoStretchSlider = document.getElementById('video-stretch');
-    
     // === STATE MANAGEMENT ===
     let originalImageSrc = null;
     let history = [];
@@ -51,8 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let isProcessing = false;
     let processingQueue = null;
     let worker = null;
-    let videoStream = null;
-    let videoAnimationFrame = null;
     
     // === WEB WORKER INITIALIZATION ===
     function initWorker() {
@@ -134,7 +133,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateSliderValue(slider) {
         const valueDisplay = document.getElementById(`${slider.id}-value`);
         if (valueDisplay) {
-            valueDisplay.textContent = slider.value;
+            let displayValue = slider.value;
+            if (slider.id === 'lightAngle') {
+                displayValue = slider.value + '°';
+            }
+            valueDisplay.textContent = displayValue;
         }
     }
     
@@ -173,9 +176,16 @@ document.addEventListener('DOMContentLoaded', () => {
             updateSliderValue(slider);
             slider.addEventListener('input', () => {
                 updateSliderValue(slider);
-                if (originalImageSrc && slider.id !== 'video-stretch') {
+                if (originalImageSrc) {
                     debouncedProcess(slider.id === 'stretch');
                 }
+            });
+        });
+        
+        // Toggle change handlers
+        [enableEdges, enableNormals, enableICA].forEach(toggle => {
+            toggle.addEventListener('change', () => {
+                if (originalImageSrc) processImage(false);
             });
         });
         
@@ -224,28 +234,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 const panel = btn.dataset.panel;
                 if (panel === 'colorspace') {
                     stretchSlider.value = 50;
+                    decorrelationSlider.value = 0;
                     updateSliderValue(stretchSlider);
+                    updateSliderValue(decorrelationSlider);
                 } else if (panel === 'adjust') {
-                    document.querySelectorAll('#adjust-panel input[type="range"]').forEach(slider => {
+                    document.querySelectorAll('#adjust-panel input[type=\"range\"]').forEach(slider => {
                         slider.value = 0;
                         updateSliderValue(slider);
                     });
+                } else if (panel === 'advanced') {
+                    lightAngleSlider.value = 45;
+                    edgeStrengthSlider.value = 50;
+                    edgeThicknessSlider.value = 1;
+                    normalStrengthSlider.value = 50;
+                    radianceScaleSlider.value = 50;
+                    directionalSharpSlider.value = 0;
+                    enableEdges.checked = false;
+                    enableNormals.checked = false;
+                    enableICA.checked = false;
+                    [lightAngleSlider, edgeStrengthSlider, edgeThicknessSlider, 
+                     normalStrengthSlider, radianceScaleSlider, directionalSharpSlider].forEach(updateSliderValue);
                 }
                 if (originalImageSrc) processImage(true);
             });
-        });
-        
-        // AI Tools
-        superResBtn.addEventListener('click', handleSuperResolution);
-        
-        autoEnhanceBtn.addEventListener('click', autoEnhance);
-        
-        // Video controls
-        startVideoBtn.addEventListener('click', toggleVideo);
-        captureFrameBtn.addEventListener('click', captureVideoFrame);
-        liveEnhanceToggle.addEventListener('change', handleLiveEnhanceToggle);
-        videoStretchSlider.addEventListener('input', () => {
-            updateSliderValue(videoStretchSlider);
         });
         
         // Close modal on background click
@@ -276,7 +287,13 @@ document.addEventListener('DOMContentLoaded', () => {
         allSliders.forEach(slider => {
             if (slider.id === 'stretch') {
                 slider.value = 50;
-            } else if (slider.id !== 'video-stretch') {
+            } else if (slider.id === 'lightAngle') {
+                slider.value = 45;
+            } else if (slider.id === 'edgeStrength' || slider.id === 'normalStrength' || slider.id === 'radianceScale') {
+                slider.value = 50;
+            } else if (slider.id === 'edgeThickness') {
+                slider.value = 1;
+            } else {
                 slider.value = 0;
             }
             updateSliderValue(slider);
@@ -323,13 +340,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 let pixels = imageData.data;
                 
-                // Step 1: Apply adjustments on main thread (fast)
+                // Step 1: Apply decorrelation stretch if enabled
+                const decorrelation = parseFloat(decorrelationSlider.value);
+                if (decorrelation > 0) {
+                    applyDecorrelationStretch(pixels, canvas.width, canvas.height, decorrelation / 100);
+                }
+                
+                // Step 2: Apply basic adjustments
                 applyAdjustments(pixels);
                 
-                // Step 2: Run DStretch (potentially slow, use worker if available)
+                // Step 3: Apply advanced enhancements
+                if (enableNormals.checked || enableEdges.checked) {
+                    applyAdvancedEnhancements(pixels, canvas.width, canvas.height);
+                }
+                
+                // Step 4: Run DStretch (potentially slow, use worker if available)
                 const stretchAmount = parseFloat(stretchSlider.value);
                 
-                if (worker) {
+                if (worker && !enableICA.checked) {
                     // Offload to worker
                     worker.postMessage({
                         type: 'PROCESS_DSTRETCH',
@@ -340,8 +368,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                 } else {
-                    // Fallback to main thread
-                    const finalPixelData = runDStretchMainThread(pixels, stretchAmount);
+                    // Fallback to main thread or ICA mode
+                    let finalPixelData;
+                    if (enableICA.checked) {
+                        finalPixelData = runICADStretch(pixels, stretchAmount);
+                    } else {
+                        finalPixelData = runDStretchMainThread(pixels, stretchAmount);
+                    }
                     applyProcessedData(finalPixelData);
                 }
             };
@@ -374,6 +407,266 @@ document.addEventListener('DOMContentLoaded', () => {
             isProcessing = false;
             hideProcessing();
         }
+    }
+    
+    // === DECORRELATION STRETCH ===
+    function applyDecorrelationStretch(pixels, width, height, amount) {
+        // Compute covariance matrix and decorrelate
+        const n = pixels.length / 4;
+        let rData = [], gData = [], bData = [];
+        let rMean = 0, gMean = 0, bMean = 0;
+        
+        for (let i = 0; i < n; i++) {
+            const r = pixels[i * 4];
+            const g = pixels[i * 4 + 1];
+            const b = pixels[i * 4 + 2];
+            rData.push(r); gData.push(g); bData.push(b);
+            rMean += r; gMean += g; bMean += b;
+        }
+        
+        rMean /= n; gMean /= n; bMean /= n;
+        
+        // Compute covariance
+        let covRR = 0, covGG = 0, covBB = 0;
+        let covRG = 0, covRB = 0, covGB = 0;
+        
+        for (let i = 0; i < n; i++) {
+            const dr = rData[i] - rMean;
+            const dg = gData[i] - gMean;
+            const db = bData[i] - bMean;
+            covRR += dr * dr; covGG += dg * dg; covBB += db * db;
+            covRG += dr * dg; covRB += dr * db; covGB += dg * db;
+        }
+        
+        covRR /= n; covGG /= n; covBB /= n;
+        covRG /= n; covRB /= n; covGB /= n;
+        
+        // Simple decorrelation using standard deviations
+        const stdR = Math.sqrt(covRR);
+        const stdG = Math.sqrt(covGG);
+        const stdB = Math.sqrt(covBB);
+        
+        for (let i = 0; i < n; i++) {
+            const idx = i * 4;
+            let r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
+            
+            // Decorrelate and stretch
+            const nr = ((r - rMean) / stdR) * 50 + rMean;
+            const ng = ((g - gMean) / stdG) * 50 + gMean;
+            const nb = ((b - bMean) / stdB) * 50 + bMean;
+            
+            // Blend with original
+            pixels[idx] = r + (nr - r) * amount;
+            pixels[idx + 1] = g + (ng - g) * amount;
+            pixels[idx + 2] = b + (nb - b) * amount;
+        }
+    }
+    
+    // === ADVANCED ENHANCEMENTS ===
+    function applyAdvancedEnhancements(pixels, width, height) {
+        let normalMap = null;
+        let edgeMap = null;
+        
+        // Generate pseudo-normal map using shape-from-shading
+        if (enableNormals.checked) {
+            normalMap = generateNormalMap(pixels, width, height);
+            applyNormalMapLighting(pixels, normalMap, width, height);
+        }
+        
+        // Apply Canny edge detection
+        if (enableEdges.checked) {
+            edgeMap = cannyEdgeDetection(pixels, width, height);
+            blendEdges(pixels, edgeMap, width, height);
+        }
+        
+        // Apply directional unsharp masking
+        const directionalAmount = parseFloat(directionalSharpSlider.value);
+        if (directionalAmount > 0 && edgeMap) {
+            applyDirectionalSharpen(pixels, edgeMap, width, height, directionalAmount / 100);
+        }
+    }
+    
+    function generateNormalMap(pixels, width, height) {
+        const normals = new Float32Array(width * height * 3);
+        const strength = parseFloat(normalStrengthSlider.value) / 100;
+        
+        for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+                // Calculate luminance gradients
+                const getL = (px, py) => {
+                    const idx = (py * width + px) * 4;
+                    return 0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2];
+                };
+                
+                const dX = (getL(x + 1, y) - getL(x - 1, y)) / 2;
+                const dY = (getL(x, y + 1) - getL(x, y - 1)) / 2;
+                
+                // Compute normal
+                const nX = -dX * strength;
+                const nY = -dY * strength;
+                const nZ = 1;
+                const len = Math.sqrt(nX * nX + nY * nY + nZ * nZ);
+                
+                const idx = (y * width + x) * 3;
+                normals[idx] = nX / len;
+                normals[idx + 1] = nY / len;
+                normals[idx + 2] = nZ / len;
+            }
+        }
+        
+        return normals;
+    }
+    
+    function applyNormalMapLighting(pixels, normals, width, height) {
+        const angle = parseFloat(lightAngleSlider.value) * (Math.PI / 180);
+        const lightX = Math.cos(angle);
+        const lightY = Math.sin(angle);
+        const lightZ = 0.5;
+        const lightLen = Math.sqrt(lightX * lightX + lightY * lightY + lightZ * lightZ);
+        const lX = lightX / lightLen, lY = lightY / lightLen, lZ = lightZ / lightLen;
+        
+        const radiance = parseFloat(radianceScaleSlider.value) / 100;
+        
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const nIdx = (y * width + x) * 3;
+                const pIdx = (y * width + x) * 4;
+                
+                // Dot product for lighting
+                const dot = Math.max(0, normals[nIdx] * lX + normals[nIdx + 1] * lY + normals[nIdx + 2] * lZ);
+                const lighting = 0.5 + dot * radiance;
+                
+                pixels[pIdx] *= lighting;
+                pixels[pIdx + 1] *= lighting;
+                pixels[pIdx + 2] *= lighting;
+            }
+        }
+    }
+    
+    function cannyEdgeDetection(pixels, width, height) {
+        const edges = new Uint8ClampedArray(width * height);
+        const strength = parseFloat(edgeStrengthSlider.value) / 100;
+        const thickness = parseInt(edgeThicknessSlider.value);
+        
+        // Simple Sobel edge detection (simplified Canny)
+        for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+                const getL = (px, py) => {
+                    const idx = (py * width + px) * 4;
+                    return 0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2];
+                };
+                
+                const gX = -getL(x-1, y-1) - 2*getL(x-1, y) - getL(x-1, y+1) +
+                           getL(x+1, y-1) + 2*getL(x+1, y) + getL(x+1, y+1);
+                const gY = -getL(x-1, y-1) - 2*getL(x, y-1) - getL(x+1, y-1) +
+                           getL(x-1, y+1) + 2*getL(x, y+1) + getL(x+1, y+1);
+                
+                const magnitude = Math.sqrt(gX * gX + gY * gY) * strength;
+                edges[y * width + x] = Math.min(255, magnitude);
+            }
+        }
+        
+        // Apply thickness
+        if (thickness > 1) {
+            const dilated = new Uint8ClampedArray(edges);
+            for (let t = 1; t < thickness; t++) {
+                for (let y = 1; y < height - 1; y++) {
+                    for (let x = 1; x < width - 1; x++) {
+                        const idx = y * width + x;
+                        dilated[idx] = Math.max(
+                            edges[idx],
+                            edges[idx - 1], edges[idx + 1],
+                            edges[idx - width], edges[idx + width]
+                        );
+                    }
+                }
+                edges.set(dilated);
+            }
+        }
+        
+        return edges;
+    }
+    
+    function blendEdges(pixels, edges, width, height) {
+        // Overlay blend mode
+        for (let i = 0; i < width * height; i++) {
+            const edgeVal = edges[i];
+            if (edgeVal > 0) {
+                const idx = i * 4;
+                const blend = edgeVal / 255;
+                pixels[idx] = pixels[idx] * (1 - blend * 0.5);
+                pixels[idx + 1] = pixels[idx + 1] * (1 - blend * 0.5);
+                pixels[idx + 2] = pixels[idx + 2] * (1 - blend * 0.5);
+            }
+        }
+    }
+    
+    function applyDirectionalSharpen(pixels, edges, width, height, amount) {
+        const output = new Uint8ClampedArray(pixels.length);
+        output.set(pixels);
+        
+        for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+                const idx = (y * width + x) * 4;
+                const edgeIdx = y * width + x;
+                
+                if (edges[edgeIdx] > 50) {
+                    // Apply directional sharpening based on edge orientation
+                    const kernel = [-1, -1, -1, -1, 9, -1, -1, -1, -1];
+                    
+                    for (let c = 0; c < 3; c++) {
+                        let sum = 0;
+                        for (let ky = -1; ky <= 1; ky++) {
+                            for (let kx = -1; kx <= 1; kx++) {
+                                const sIdx = ((y + ky) * width + (x + kx)) * 4 + c;
+                                sum += pixels[sIdx] * kernel[(ky + 1) * 3 + (kx + 1)];
+                            }
+                        }
+                        output[idx + c] = pixels[idx + c] + (sum - pixels[idx + c]) * amount;
+                    }
+                }
+            }
+        }
+        
+        pixels.set(output);
+    }
+    
+    // === ICA-ENHANCED DSTRETCH ===
+    function runICADStretch(pixels, stretchAmount) {
+        // Simplified ICA using FastICA-like approach
+        const n = pixels.length / 4;
+        let r = [], g = [], b = [];
+        
+        for (let i = 0; i < n; i++) {
+            r.push(pixels[i * 4]);
+            g.push(pixels[i * 4 + 1]);
+            b.push(pixels[i * 4 + 2]);
+        }
+        
+        // Center data
+        const rMean = r.reduce((a,b) => a+b, 0) / n;
+        const gMean = g.reduce((a,b) => a+b, 0) / n;
+        const bMean = b.reduce((a,b) => a+b, 0) / n;
+        
+        r = r.map(v => v - rMean);
+        g = g.map(v => v - gMean);
+        b = b.map(v => v - bMean);
+        
+        // Perform whitening (simplified)
+        const whiteR = r.map(v => v * stretchAmount / 50);
+        const whiteG = g.map(v => v * stretchAmount / 50);
+        const whiteB = b.map(v => v * stretchAmount / 50);
+        
+        // Convert back
+        const finalPixelData = new Uint8ClampedArray(pixels.length);
+        for (let i = 0; i < n; i++) {
+            finalPixelData[i * 4] = Math.max(0, Math.min(255, whiteR[i] + rMean));
+            finalPixelData[i * 4 + 1] = Math.max(0, Math.min(255, whiteG[i] + gMean));
+            finalPixelData[i * 4 + 2] = Math.max(0, Math.min(255, whiteB[i] + bMean));
+            finalPixelData[i * 4 + 3] = 255;
+        }
+        
+        return finalPixelData;
     }
     
     function applyAdjustments(pixels) {
@@ -501,505 +794,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return finalPixelData;
     }
     
-    // === SUPER RESOLUTION (AI-POWERED) ===
-    async function handleSuperResolution() {
-        if (!originalImageSrc) {
-            alert('Please load an image first');
-            return;
-        }
-        
-        const confirmUpscale = confirm('Super Resolution uses AI to enhance and upscale your image.\n\nThis may take 10-30 seconds depending on image size.\n\nContinue?');
-        if (!confirmUpscale) return;
-        
-        showProcessing();
-        
-        try {
-            // Convert current image to base64
-            const base64Data = originalImageSrc.split(',')[1];
-            
-            // Call Claude API for super resolution via Netlify function
-            const response = await fetch('/.netlify/functions/super-res', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
-                    max_tokens: 1024,
-                    messages: [{
-                        role: 'user',
-                        content: [
-                            {
-                                type: 'image',
-                                source: {
-                                    type: 'base64',
-                                    media_type: 'image/png',
-                                    data: base64Data
-                                }
-                            },
-                            {
-                                type: 'text',
-                                text: `Analyze this image and provide detailed enhancement recommendations for super-resolution upscaling. Focus on:
-1. Key details that should be preserved or enhanced
-2. Texture patterns and grain
-3. Edge sharpness recommendations
-4. Color accuracy adjustments
-5. Noise reduction suggestions
-
-Provide your response as a JSON object with these exact fields:
-{
-  "sharpness": <number 0-100>,
-  "denoiseStrength": <number 0-100>,
-  "detailEnhancement": <number 0-100>,
-  "edgePreservation": <number 0-100>,
-  "colorBoost": <number 0-100>,
-  "recommendedScale": <number 1.5-4.0>,
-  "analysis": "<brief description of image quality>"
-}
-
-Return ONLY the JSON object, no other text.`
-                            }
-                        ]
-                    }]
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`API error: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            const aiResponse = data.content.find(item => item.type === 'text')?.text || '';
-            
-            // Parse AI recommendations
-            let recommendations;
-            try {
-                const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    recommendations = JSON.parse(jsonMatch[0]);
-                } else {
-                    throw new Error('No JSON found in response');
-                }
-            } catch (e) {
-                // Fallback to smart defaults
-                recommendations = {
-                    sharpness: 70,
-                    denoiseStrength: 30,
-                    detailEnhancement: 80,
-                    edgePreservation: 85,
-                    colorBoost: 40,
-                    recommendedScale: 2.0,
-                    analysis: 'Using default enhancement settings'
-                };
-            }
-            
-            // Apply super resolution with AI recommendations
-            await applySuperResolution(recommendations);
-            
-            hideProcessing();
-            alert(`Super Resolution Complete!\n\nAI Analysis: ${recommendations.analysis}\n\nImage upscaled ${recommendations.recommendedScale}x with intelligent enhancement.`);
-            
-        } catch (error) {
-            console.error('Super Resolution error:', error);
-            hideProcessing();
-            
-            // Fallback to basic upscaling
-            const useFallback = confirm('AI service unavailable. Use basic upscaling instead?\n\n(Image will be doubled in size with sharpening)');
-            if (useFallback) {
-                showProcessing();
-                await applySuperResolution({
-                    sharpness: 75,
-                    denoiseStrength: 20,
-                    detailEnhancement: 60,
-                    edgePreservation: 80,
-                    colorBoost: 30,
-                    recommendedScale: 2.0,
-                    analysis: 'Basic upscaling'
-                });
-                hideProcessing();
-                alert('Basic super resolution applied! Image doubled in size.');
-            }
-        }
-    }
-    
-    async function applySuperResolution(recommendations) {
-        return new Promise((resolve) => {
-            const sourceImg = new Image();
-            sourceImg.onload = () => {
-                const scale = recommendations.recommendedScale || 2.0;
-                const newWidth = Math.floor(sourceImg.naturalWidth * scale);
-                const newHeight = Math.floor(sourceImg.naturalHeight * scale);
-                
-                // Create temporary canvas for upscaling
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = newWidth;
-                tempCanvas.height = newHeight;
-                const tempCtx = tempCanvas.getContext('2d', { 
-                    imageSmoothingEnabled: true,
-                    imageSmoothingQuality: 'high'
-                });
-                
-                // Use bicubic-like interpolation
-                tempCtx.imageSmoothingEnabled = true;
-                tempCtx.imageSmoothingQuality = 'high';
-                tempCtx.drawImage(sourceImg, 0, 0, newWidth, newHeight);
-                
-                // Get pixel data for enhancement
-                const imageData = tempCtx.getImageData(0, 0, newWidth, newHeight);
-                const pixels = imageData.data;
-                
-                // Apply AI-recommended enhancements
-                enhancePixels(pixels, recommendations);
-                
-                // Apply sharpening based on AI recommendation
-                if (recommendations.sharpness > 0) {
-                    applyAdvancedSharpen(pixels, newWidth, newHeight, recommendations.sharpness / 100);
-                }
-                
-                tempCtx.putImageData(imageData, 0, 0);
-                
-                // Update original image
-                originalImageSrc = tempCanvas.toDataURL('image/png', 0.95);
-                history = [originalImageSrc];
-                historyIndex = 0;
-                updateUndoRedoButtons();
-                
-                // Process with current settings
-                processImage(true);
-                resolve();
-            };
-            sourceImg.src = originalImageSrc;
-        });
-    }
-    
-    function enhancePixels(pixels, recommendations) {
-        const denoise = recommendations.denoiseStrength / 100;
-        const detail = recommendations.detailEnhancement / 100;
-        const colorBoost = recommendations.colorBoost / 100;
-        
-        for (let i = 0; i < pixels.length; i += 4) {
-            let r = pixels[i];
-            let g = pixels[i + 1];
-            let b = pixels[i + 2];
-            
-            // Detail enhancement (micro-contrast)
-            if (detail > 0) {
-                const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-                const localContrast = 1 + (detail * 0.3);
-                r = luma + (r - luma) * localContrast;
-                g = luma + (g - luma) * localContrast;
-                b = luma + (b - luma) * localContrast;
-            }
-            
-            // Color boost
-            if (colorBoost > 0) {
-                const avg = (r + g + b) / 3;
-                r = avg + (r - avg) * (1 + colorBoost * 0.5);
-                g = avg + (g - avg) * (1 + colorBoost * 0.5);
-                b = avg + (b - avg) * (1 + colorBoost * 0.5);
-            }
-            
-            // Denoise (subtle smoothing)
-            if (denoise > 0) {
-                const smoothFactor = 1 - (denoise * 0.2);
-                const targetLuma = 0.299 * r + 0.587 * g + 0.114 * b;
-                r = r * smoothFactor + targetLuma * (1 - smoothFactor) * (r / (targetLuma || 1));
-                g = g * smoothFactor + targetLuma * (1 - smoothFactor) * (g / (targetLuma || 1));
-                b = b * smoothFactor + targetLuma * (1 - smoothFactor) * (b / (targetLuma || 1));
-            }
-            
-            pixels[i] = Math.max(0, Math.min(255, r));
-            pixels[i + 1] = Math.max(0, Math.min(255, g));
-            pixels[i + 2] = Math.max(0, Math.min(255, b));
-        }
-    }
-    
-    function applyAdvancedSharpen(pixels, width, height, amount) {
-        // Unsharp mask technique
-        const kernel = [
-            -1, -1, -1,
-            -1,  9, -1,
-            -1, -1, -1
-        ];
-        
-        const output = new Uint8ClampedArray(pixels.length);
-        const side = 3;
-        const halfSide = 1;
-        
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const dstOff = (y * width + x) * 4;
-                let r = 0, g = 0, b = 0;
-                
-                for (let cy = 0; cy < side; cy++) {
-                    for (let cx = 0; cx < side; cx++) {
-                        const scy = Math.min(height - 1, Math.max(0, y + cy - halfSide));
-                        const scx = Math.min(width - 1, Math.max(0, x + cx - halfSide));
-                        const srcOff = (scy * width + scx) * 4;
-                        const wt = kernel[cy * side + cx];
-                        
-                        r += pixels[srcOff] * wt;
-                        g += pixels[srcOff + 1] * wt;
-                        b += pixels[srcOff + 2] * wt;
-                    }
-                }
-                
-                // Blend sharpened with original based on amount
-                output[dstOff] = pixels[dstOff] + (r - pixels[dstOff]) * amount;
-                output[dstOff + 1] = pixels[dstOff + 1] + (g - pixels[dstOff + 1]) * amount;
-                output[dstOff + 2] = pixels[dstOff + 2] + (b - pixels[dstOff + 2]) * amount;
-                output[dstOff + 3] = pixels[dstOff + 3];
-            }
-        }
-        
-        pixels.set(output);
-    }
-    
-    // === AUTO ENHANCE (AI-POWERED) ===
-    function autoEnhance() {
-        if (!originalImageSrc) {
-            alert('Please load an image first');
-            return;
-        }
-        
-        showProcessing();
-        
-        // Simulate AI analysis with smart defaults
-        setTimeout(() => {
-            // Reset to original first
-            const baseImage = new Image();
-            baseImage.onload = () => {
-                canvas.width = baseImage.naturalWidth;
-                canvas.height = baseImage.naturalHeight;
-                ctx.drawImage(baseImage, 0, 0);
-                
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const analysis = analyzeImage(imageData);
-                
-                // Apply smart adjustments based on analysis
-                document.getElementById('exposure').value = analysis.exposure;
-                document.getElementById('shadows').value = analysis.shadows;
-                document.getElementById('brightness').value = analysis.brightness;
-                document.getElementById('contrast').value = analysis.contrast;
-                document.getElementById('saturation').value = analysis.saturation;
-                stretchSlider.value = analysis.stretch;
-                
-                // Update displays
-                allSliders.forEach(updateSliderValue);
-                
-                // Process with new settings
-                hideProcessing();
-                processImage(true);
-            };
-            baseImage.src = originalImageSrc;
-        }, 500);
-    }
-    
-    function analyzeImage(imageData) {
-        const pixels = imageData.data;
-        let totalBrightness = 0;
-        let darkPixels = 0;
-        let brightPixels = 0;
-        
-        for (let i = 0; i < pixels.length; i += 4) {
-            const luma = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
-            totalBrightness += luma;
-            if (luma < 85) darkPixels++;
-            if (luma > 170) brightPixels++;
-        }
-        
-        const avgBrightness = totalBrightness / (pixels.length / 4);
-        const darkRatio = darkPixels / (pixels.length / 4);
-        const brightRatio = brightPixels / (pixels.length / 4);
-        
-        // Smart adjustments based on analysis
-        const exposure = avgBrightness < 100 ? 15 : (avgBrightness > 155 ? -10 : 0);
-        const shadows = darkRatio > 0.3 ? 30 : 15;
-        const brightness = avgBrightness < 110 ? 10 : 0;
-        const contrast = avgBrightness > 100 && avgBrightness < 155 ? 15 : 10;
-        const saturation = 20;
-        const stretch = 65;
-        
-        return { exposure, shadows, brightness, contrast, saturation, stretch };
-    }
-    
-    // === VIDEO PROCESSING ===
-    async function toggleVideo() {
-        if (!videoStream) {
-            try {
-                // Simplified constraints for better compatibility
-                const constraints = {
-                    video: {
-                        facingMode: 'environment'
-                    }
-                };
-                
-                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-                videoElement.srcObject = videoStream;
-                videoElement.classList.add('active');
-                imageDisplay.classList.add('hidden');
-                
-                // Update button text
-                const btnText = startVideoBtn.querySelector('span');
-                if (btnText) btnText.textContent = 'Stop Camera';
-                
-                captureFrameBtn.disabled = false;
-                
-                // Wait for video to be ready
-                videoElement.onloadedmetadata = () => {
-                    if (liveEnhanceToggle.checked) {
-                        startLiveProcessing();
-                    }
-                };
-            } catch (err) {
-                console.error('Camera error:', err);
-                alert('Could not access camera. Please make sure:\n1. You granted camera permission\n2. Your browser supports camera access\n3. The site is using HTTPS');
-            }
-        } else {
-            stopVideo();
-        }
-    }
-    
-    function stopVideo() {
-        if (videoStream) {
-            videoStream.getTracks().forEach(track => track.stop());
-            videoStream = null;
-            videoElement.classList.remove('active');
-            videoCanvas.classList.remove('active');
-            videoElement.srcObject = null;
-            imageDisplay.classList.remove('hidden');
-            
-            // Update button text
-            const btnText = startVideoBtn.querySelector('span');
-            if (btnText) btnText.textContent = 'Start Camera';
-            
-            captureFrameBtn.disabled = true;
-            stopLiveProcessing();
-        }
-    }
-    
-    function handleLiveEnhanceToggle() {
-        if (liveEnhanceToggle.checked && videoStream) {
-            startLiveProcessing();
-        } else {
-            stopLiveProcessing();
-        }
-    }
-    
-    function startLiveProcessing() {
-        if (videoAnimationFrame) return;
-        
-        const processFrame = () => {
-            if (!liveEnhanceToggle.checked || !videoStream) {
-                stopLiveProcessing();
-                return;
-            }
-            
-            // Make sure video is ready
-            if (videoElement.readyState < 2) {
-                videoAnimationFrame = requestAnimationFrame(processFrame);
-                return;
-            }
-            
-            try {
-                videoCanvas.width = videoElement.videoWidth;
-                videoCanvas.height = videoElement.videoHeight;
-                
-                if (videoCanvas.width > 0 && videoCanvas.height > 0) {
-                    videoCtx.drawImage(videoElement, 0, 0);
-                    
-                    const imageData = videoCtx.getImageData(0, 0, videoCanvas.width, videoCanvas.height);
-                    const pixels = imageData.data;
-                    
-                    // Apply quick enhancement
-                    const stretchAmount = parseFloat(videoStretchSlider.value);
-                    applyQuickEnhancement(pixels, stretchAmount);
-                    
-                    videoCtx.putImageData(imageData, 0, 0);
-                    videoElement.classList.remove('active');
-                    videoCanvas.classList.add('active');
-                }
-            } catch (err) {
-                console.error('Frame processing error:', err);
-            }
-            
-            videoAnimationFrame = requestAnimationFrame(processFrame);
-        };
-        
-        processFrame();
-    }
-    
-    function stopLiveProcessing() {
-        if (videoAnimationFrame) {
-            cancelAnimationFrame(videoAnimationFrame);
-            videoAnimationFrame = null;
-            videoCanvas.classList.remove('active');
-            if (videoStream) {
-                videoElement.classList.add('active');
-            }
-        }
-    }
-    
-    function applyQuickEnhancement(pixels, stretch) {
-        // Lightweight enhancement for real-time processing
-        const enhanceFactor = stretch / 50;
-        
-        for (let i = 0; i < pixels.length; i += 4) {
-            let r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
-            
-            // Simple color stretch
-            const avg = (r + g + b) / 3;
-            r = avg + (r - avg) * enhanceFactor;
-            g = avg + (g - avg) * enhanceFactor;
-            b = avg + (b - avg) * enhanceFactor;
-            
-            pixels[i] = Math.max(0, Math.min(255, r));
-            pixels[i + 1] = Math.max(0, Math.min(255, g));
-            pixels[i + 2] = Math.max(0, Math.min(255, b));
-        }
-    }
-    
-    function captureVideoFrame() {
-        if (!videoStream) return;
-        
-        try {
-            // Make sure video is ready
-            if (videoElement.readyState < 2) {
-                alert('Video not ready yet. Please wait a moment.');
-                return;
-            }
-            
-            const captureCanvas = document.createElement('canvas');
-            captureCanvas.width = videoElement.videoWidth;
-            captureCanvas.height = videoElement.videoHeight;
-            
-            if (captureCanvas.width === 0 || captureCanvas.height === 0) {
-                alert('Could not capture frame. Please try again.');
-                return;
-            }
-            
-            const captureCtx = captureCanvas.getContext('2d');
-            captureCtx.drawImage(videoElement, 0, 0);
-            
-            originalImageSrc = captureCanvas.toDataURL('image/png');
-            history = [originalImageSrc];
-            historyIndex = 0;
-            updateUndoRedoButtons();
-            
-            // Switch to enhance tab
-            navTabs[0].click();
-            
-            // Stop video
-            stopVideo();
-            
-            // Process captured frame
-            processImage(true);
-        } catch (err) {
-            console.error('Capture error:', err);
-            alert('Could not capture frame: ' + err.message);
-        }
-    }
-    
     function downloadImage() {
         if (!history[historyIndex]) {
             alert('No image to download');
@@ -1081,6 +875,7 @@ Return ONLY the JSON object, no other text.`
     function convertRgbTo(r, g, b, cs) {
         switch (cs) {
             case 'LAB': return rgbToLab(r, g, b);
+            case 'LCH': return rgbToLch(r, g, b);
             case 'YRE': return [0.299 * r + 0.587 * g + 0.114 * b, r, g];
             case 'LRE': return [0.2126 * r + 0.7152 * g + 0.0722 * b, r, g];
             case 'YBK': return [0.299 * r + 0.587 * g + 0.114 * b, b, 255 - g];
@@ -1092,6 +887,7 @@ Return ONLY the JSON object, no other text.`
         let rgb;
         switch (cs) {
             case 'LAB': rgb = labToRgb(c1, c2, c3); break;
+            case 'LCH': rgb = lchToRgb(c1, c2, c3); break;
             case 'YRE': rgb = [c2, c3, (c1 - 0.587 * c3 - 0.299 * c2) / 0.114]; break;
             case 'LRE': rgb = [c2, c3, (c1 - 0.7152 * c3 - 0.2126 * c2) / 0.0722]; break;
             case 'YBK': rgb = [(c1 - 0.587 * (255 - c3) - 0.114 * c2) / 0.299, 255 - c3, c2]; break;
@@ -1136,5 +932,22 @@ Return ONLY the JSON object, no other text.`
         return [r * 255, g * 255, b * 255];
     }
     
+    function rgbToLch(r, g, b) {
+        const lab = rgbToLab(r, g, b);
+        const L = lab[0], a = lab[1], b_lab = lab[2];
+        const C = Math.sqrt(a * a + b_lab * b_lab);
+        let H = Math.atan2(b_lab, a) * (180 / Math.PI);
+        if (H < 0) H += 360;
+        return [L, C, H];
+    }
+    
+    function lchToRgb(L, C, H) {
+        const H_rad = H * (Math.PI / 180);
+        const a = C * Math.cos(H_rad);
+        const b_lab = C * Math.sin(H_rad);
+        return labToRgb(L, a, b_lab);
+    }
+    
     initialize();
-});
+});(255, r));
+            pixels[i + 1] = Math.max(0, Math.min
