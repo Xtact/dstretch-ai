@@ -312,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateSliderValue(stretchSlider);
                     updateSliderValue(decorrelationSlider);
                 } else if (panel === 'adjust') {
-                    document.querySelectorAll('#adjust-panel input[type=\"range\"]').forEach(slider => {
+                    document.querySelectorAll('#adjust-panel input[type="range"]').forEach(slider => {
                         slider.value = 0;
                         updateSliderValue(slider);
                     });
@@ -339,15 +339,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 menuModal.classList.remove('visible');
             }
         });
+        
+        console.log('=== Initialization Complete ===');
     };
     
     // === IMAGE UPLOAD ===
     function handleImageUpload(event) {
+        console.log('=== FILE SELECTED ===');
         const file = event.target.files[0];
         if (!file) return;
         
         const reader = new FileReader();
         reader.onload = e => {
+            console.log('=== IMAGE LOADED ===');
             originalImageSrc = e.target.result;
             history = [originalImageSrc];
             historyIndex = 0;
@@ -740,7 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
             finalPixelData[i * 4 + 3] = 255;
         }
         
-        return finalPixelData;
+        return finalPixelData
     }
     
     function applyAdjustments(pixels) {
@@ -1023,5 +1027,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     initialize();
-});(255, r));
-            pixels[i + 1] = Math.max(0, Math.min
+});
