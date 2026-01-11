@@ -348,7 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateSliderValue(stretchSlider);
                     updateSliderValue(decorrelationSlider);
                 } else if (panel === 'adjust') {
-                    document.querySelectorAll('#adjust-panel input[type=\"range\"]').forEach(slider => {
+                    document.querySelectorAll('#adjust-panel input[type="range"]').forEach(slider => {
                         slider.value = 0;
                         updateSliderValue(slider);
                     });
@@ -375,15 +375,87 @@ document.addEventListener('DOMContentLoaded', () => {
                 menuModal.classList.remove('visible');
             }
         });
+        
+        console.log('=== Initialization Complete ===');
     };
+    
+    // === ZOOM FUNCTIONALITY ===
+    function zoomIn() {
+        zoomLevel = Math.min(zoomLevel * 1.3, 5);
+        applyZoom();
+    }
+    
+    function zoomOut() {
+        zoomLevel = Math.max(zoomLevel / 1.3, 1);
+        if (zoomLevel === 1) {
+            panX = 0;
+            panY = 0;
+        }
+        applyZoom();
+    }
+    
+    function resetZoom() {
+        zoomLevel = 1;
+        panX = 0;
+        panY = 0;
+        applyZoom();
+    }
+    
+    function applyZoom() {
+        const transform = `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`;
+        imageDisplay.style.transform = transform;
+        zoomLevelDisplay.textContent = `${Math.round(zoomLevel * 100)}%`;
+        
+        if (zoomLevel > 1) {
+            imageDisplay.classList.add('zoomed');
+        } else {
+            imageDisplay.classList.remove('zoomed');
+        }
+    }
+    
+    function startPan(e) {
+        if (zoomLevel <= 1) return;
+        
+        // Don't pan if clicking zoom buttons
+        if (e.target.closest('.zoom-controls')) return;
+        
+        e.preventDefault();
+        isPanning = true;
+        
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        startX = clientX - panX;
+        startY = clientY - panY;
+    }
+    
+    function doPan(e) {
+        if (!isPanning || zoomLevel <= 1) return;
+        
+        e.preventDefault();
+        
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        panX = clientX - startX;
+        panY = clientY - startY;
+        
+        applyZoom();
+    }
+    
+    function endPan() {
+        isPanning = false;
+    }
     
     // === IMAGE UPLOAD ===
     function handleImageUpload(event) {
+        console.log('=== FILE SELECTED ===');
         const file = event.target.files[0];
         if (!file) return;
         
         const reader = new FileReader();
         reader.onload = e => {
+            console.log('=== IMAGE LOADED ===');
             originalImageSrc = e.target.result;
             history = [originalImageSrc];
             historyIndex = 0;
@@ -707,369 +779,366 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         return edges;
-    }
+        function blendEdges(pixels, edges, width, height) {
+// Overlay blend mode
+for (let i = 0; i < width * height; i++) {
+const edgeVal = edges[i];
+if (edgeVal > 0) {
+const idx = i * 4;
+const blend = edgeVal / 255;
+pixels[idx] = pixels[idx] * (1 - blend * 0.5);
+pixels[idx + 1] = pixels[idx + 1] * (1 - blend * 0.5);
+pixels[idx + 2] = pixels[idx + 2] * (1 - blend * 0.5);
+}
+}
+}
+        function applyDirectionalSharpen(pixels, edges, width, height, amount) {
+    const output = new Uint8ClampedArray(pixels.length);
+    output.set(pixels);
     
-    function blendEdges(pixels, edges, width, height) {
-        // Overlay blend mode
-        for (let i = 0; i < width * height; i++) {
-            const edgeVal = edges[i];
-            if (edgeVal > 0) {
-                const idx = i * 4;
-                const blend = edgeVal / 255;
-                pixels[idx] = pixels[idx] * (1 - blend * 0.5);
-                pixels[idx + 1] = pixels[idx + 1] * (1 - blend * 0.5);
-                pixels[idx + 2] = pixels[idx + 2] * (1 - blend * 0.5);
-            }
-        }
-    }
-    
-    function applyDirectionalSharpen(pixels, edges, width, height, amount) {
-        const output = new Uint8ClampedArray(pixels.length);
-        output.set(pixels);
-        
-        for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-                const idx = (y * width + x) * 4;
-                const edgeIdx = y * width + x;
+    for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+            const idx = (y * width + x) * 4;
+            const edgeIdx = y * width + x;
+            
+            if (edges[edgeIdx] > 50) {
+                // Apply directional sharpening based on edge orientation
+                const kernel = [-1, -1, -1, -1, 9, -1, -1, -1, -1];
                 
-                if (edges[edgeIdx] > 50) {
-                    // Apply directional sharpening based on edge orientation
-                    const kernel = [-1, -1, -1, -1, 9, -1, -1, -1, -1];
-                    
-                    for (let c = 0; c < 3; c++) {
-                        let sum = 0;
-                        for (let ky = -1; ky <= 1; ky++) {
-                            for (let kx = -1; kx <= 1; kx++) {
-                                const sIdx = ((y + ky) * width + (x + kx)) * 4 + c;
-                                sum += pixels[sIdx] * kernel[(ky + 1) * 3 + (kx + 1)];
-                            }
+                for (let c = 0; c < 3; c++) {
+                    let sum = 0;
+                    for (let ky = -1; ky <= 1; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            const sIdx = ((y + ky) * width + (x + kx)) * 4 + c;
+                            sum += pixels[sIdx] * kernel[(ky + 1) * 3 + (kx + 1)];
                         }
-                        output[idx + c] = pixels[idx + c] + (sum - pixels[idx + c]) * amount;
                     }
+                    output[idx + c] = pixels[idx + c] + (sum - pixels[idx + c]) * amount;
                 }
             }
         }
-        
-        pixels.set(output);
     }
     
-    // === ICA-ENHANCED DSTRETCH ===
-    function runICADStretch(pixels, stretchAmount) {
-        // Simplified ICA using FastICA-like approach
-        const n = pixels.length / 4;
-        let r = [], g = [], b = [];
-        
-        for (let i = 0; i < n; i++) {
-            r.push(pixels[i * 4]);
-            g.push(pixels[i * 4 + 1]);
-            b.push(pixels[i * 4 + 2]);
-        }
-        
-        // Center data
-        const rMean = r.reduce((a,b) => a+b, 0) / n;
-        const gMean = g.reduce((a,b) => a+b, 0) / n;
-        const bMean = b.reduce((a,b) => a+b, 0) / n;
-        
-        r = r.map(v => v - rMean);
-        g = g.map(v => v - gMean);
-        b = b.map(v => v - bMean);
-        
-        // Perform whitening (simplified)
-        const whiteR = r.map(v => v * stretchAmount / 50);
-        const whiteG = g.map(v => v * stretchAmount / 50);
-        const whiteB = b.map(v => v * stretchAmount / 50);
-        
-        // Convert back
-        const finalPixelData = new Uint8ClampedArray(pixels.length);
-        for (let i = 0; i < n; i++) {
-            finalPixelData[i * 4] = Math.max(0, Math.min(255, whiteR[i] + rMean));
-            finalPixelData[i * 4 + 1] = Math.max(0, Math.min(255, whiteG[i] + gMean));
-            finalPixelData[i * 4 + 2] = Math.max(0, Math.min(255, whiteB[i] + bMean));
-            finalPixelData[i * 4 + 3] = 255;
-        }
-        
-        return finalPixelData;
+    pixels.set(output);
+}
+
+// === ICA-ENHANCED DSTRETCH ===
+function runICADStretch(pixels, stretchAmount) {
+    // Simplified ICA using FastICA-like approach
+    const n = pixels.length / 4;
+    let r = [], g = [], b = [];
+    
+    for (let i = 0; i < n; i++) {
+        r.push(pixels[i * 4]);
+        g.push(pixels[i * 4 + 1]);
+        b.push(pixels[i * 4 + 2]);
     }
     
-    function applyAdjustments(pixels) {
-        const exposure = parseFloat(document.getElementById('exposure').value);
-        const shadows = parseFloat(document.getElementById('shadows').value);
-        const brightness = parseFloat(document.getElementById('brightness').value);
-        const contrast = parseFloat(document.getElementById('contrast').value);
-        const blackPoint = parseFloat(document.getElementById('blackPoint').value) / 100;
-        const saturation = parseFloat(document.getElementById('saturation').value);
-        const sharpen = parseFloat(document.getElementById('sharpen').value);
-        
-        const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
-        const satFactor = saturation / 100;
-        
-        for (let i = 0; i < pixels.length; i += 4) {
-            let r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
-            
-            // Exposure & Brightness
-            const totalBrightness = exposure + brightness;
-            r += totalBrightness;
-            g += totalBrightness;
-            b += totalBrightness;
-            
-            // Shadows lift
-            const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-            if (luma < 128) {
-                const shadowFactor = shadows * (1 - luma / 128) * 0.5;
-                r += shadowFactor;
-                g += shadowFactor;
-                b += shadowFactor;
-            }
-            
-            // Contrast
-            r = contrastFactor * (r - 128) + 128;
-            g = contrastFactor * (g - 128) + 128;
-            b = contrastFactor * (b - 128) + 128;
-            
-            // Black Point
-            r = Math.max(r, r * blackPoint);
-            g = Math.max(g, g * blackPoint);
-            b = Math.max(b, b * blackPoint);
-            
-            // Saturation
-            const avg = (r + g + b) / 3;
-            r = avg + (r - avg) * (1 + satFactor);
-            g = avg + (g - avg) * (1 + satFactor);
-            b = avg + (b - avg) * (1 + satFactor);
-            
-            // Clamp
-            pixels[i] = Math.max(0, Math.min(255, r));
-            pixels[i + 1] = Math.max(0, Math.min(255, g));
-            pixels[i + 2] = Math.max(0, Math.min(255, b));
-        }
-        
-        // Simple sharpen filter
-        if (sharpen > 0) {
-            applySharpen(pixels, canvas.width, canvas.height, sharpen / 100);
-        }
+    // Center data
+    const rMean = r.reduce((a,b) => a+b, 0) / n;
+    const gMean = g.reduce((a,b) => a+b, 0) / n;
+    const bMean = b.reduce((a,b) => a+b, 0) / n;
+    
+    r = r.map(v => v - rMean);
+    g = g.map(v => v - gMean);
+    b = b.map(v => v - bMean);
+    
+    // Perform whitening (simplified)
+    const whiteR = r.map(v => v * stretchAmount / 50);
+    const whiteG = g.map(v => v * stretchAmount / 50);
+    const whiteB = b.map(v => v * stretchAmount / 50);
+    
+    // Convert back
+    const finalPixelData = new Uint8ClampedArray(pixels.length);
+    for (let i = 0; i < n; i++) {
+        finalPixelData[i * 4] = Math.max(0, Math.min(255, whiteR[i] + rMean));
+        finalPixelData[i * 4 + 1] = Math.max(0, Math.min(255, whiteG[i] + gMean));
+        finalPixelData[i * 4 + 2] = Math.max(0, Math.min(255, whiteB[i] + bMean));
+        finalPixelData[i * 4 + 3] = 255;
     }
     
-    function applySharpen(pixels, width, height, amount) {
-        const kernel = [
-            0, -1, 0,
-            -1, 5, -1,
-            0, -1, 0
-        ];
-        const side = Math.round(Math.sqrt(kernel.length));
-        const halfSide = Math.floor(side / 2);
-        const output = new Uint8ClampedArray(pixels.length);
+    return finalPixelData;
+}
+
+function applyAdjustments(pixels) {
+    const exposure = parseFloat(document.getElementById('exposure').value);
+    const shadows = parseFloat(document.getElementById('shadows').value);
+    const brightness = parseFloat(document.getElementById('brightness').value);
+    const contrast = parseFloat(document.getElementById('contrast').value);
+    const blackPoint = parseFloat(document.getElementById('blackPoint').value) / 100;
+    const saturation = parseFloat(document.getElementById('saturation').value);
+    const sharpen = parseFloat(document.getElementById('sharpen').value);
+    
+    const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+    const satFactor = saturation / 100;
+    
+    for (let i = 0; i < pixels.length; i += 4) {
+        let r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
         
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const dstOff = (y * width + x) * 4;
-                let r = 0, g = 0, b = 0;
-                
-                for (let cy = 0; cy < side; cy++) {
-                    for (let cx = 0; cx < side; cx++) {
-                        const scy = Math.min(height - 1, Math.max(0, y + cy - halfSide));
-                        const scx = Math.min(width - 1, Math.max(0, x + cx - halfSide));
-                        const srcOff = (scy * width + scx) * 4;
-                        const wt = kernel[cy * side + cx];
-                        
-                        r += pixels[srcOff] * wt;
-                        g += pixels[srcOff + 1] * wt;
-                        b += pixels[srcOff + 2] * wt;
-                    }
+        // Exposure & Brightness
+        const totalBrightness = exposure + brightness;
+        r += totalBrightness;
+        g += totalBrightness;
+        b += totalBrightness;
+        
+        // Shadows lift
+        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (luma < 128) {
+            const shadowFactor = shadows * (1 - luma / 128) * 0.5;
+            r += shadowFactor;
+            g += shadowFactor;
+            b += shadowFactor;
+        }
+        
+        // Contrast
+        r = contrastFactor * (r - 128) + 128;
+        g = contrastFactor * (g - 128) + 128;
+        b = contrastFactor * (b - 128) + 128;
+        
+        // Black Point
+        r = Math.max(r, r * blackPoint);
+        g = Math.max(g, g * blackPoint);
+        b = Math.max(b, b * blackPoint);
+        
+        // Saturation
+        const avg = (r + g + b) / 3;
+        r = avg + (r - avg) * (1 + satFactor);
+        g = avg + (g - avg) * (1 + satFactor);
+        b = avg + (b - avg) * (1 + satFactor);
+        
+        // Clamp
+        pixels[i] = Math.max(0, Math.min(255, r));
+        pixels[i + 1] = Math.max(0, Math.min(255, g));
+        pixels[i + 2] = Math.max(0, Math.min(255, b));
+    }
+    
+    // Simple sharpen filter
+    if (sharpen > 0) {
+        applySharpen(pixels, canvas.width, canvas.height, sharpen / 100);
+    }
+}
+
+function applySharpen(pixels, width, height, amount) {
+    const kernel = [
+        0, -1, 0,
+        -1, 5, -1,
+        0, -1, 0
+    ];
+    const side = Math.round(Math.sqrt(kernel.length));
+    const halfSide = Math.floor(side / 2);
+    const output = new Uint8ClampedArray(pixels.length);
+    
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const dstOff = (y * width + x) * 4;
+            let r = 0, g = 0, b = 0;
+            
+            for (let cy = 0; cy < side; cy++) {
+                for (let cx = 0; cx < side; cx++) {
+                    const scy = Math.min(height - 1, Math.max(0, y + cy - halfSide));
+                    const scx = Math.min(width - 1, Math.max(0, x + cx - halfSide));
+                    const srcOff = (scy * width + scx) * 4;
+                    const wt = kernel[cy * side + cx];
+                    
+                    r += pixels[srcOff] * wt;
+                    g += pixels[srcOff + 1] * wt;
+                    b += pixels[srcOff + 2] * wt;
                 }
-                
-                output[dstOff] = pixels[dstOff] + (r - pixels[dstOff]) * amount;
-                output[dstOff + 1] = pixels[dstOff + 1] + (g - pixels[dstOff + 1]) * amount;
-                output[dstOff + 2] = pixels[dstOff + 2] + (b - pixels[dstOff + 2]) * amount;
-                output[dstOff + 3] = pixels[dstOff + 3];
             }
-        }
-        
-        pixels.set(output);
-    }
-    
-    function runDStretchMainThread(imageData, stretchAmount) {
-        const nPixels = imageData.length / 4;
-        let c1 = [], c2 = [], c3 = [];
-        
-        for (let i = 0; i < nPixels; i++) {
-            const r = imageData[i * 4];
-            const g = imageData[i * 4 + 1];
-            const b = imageData[i * 4 + 2];
-            const converted = convertRgbTo(r, g, b, selectedColorspace);
-            c1.push(converted[0]);
-            c2.push(converted[1]);
-            c3.push(converted[2]);
-        }
-        
-        const { stretchedC1, stretchedC2, stretchedC3 } = performDstretch(c1, c2, c3, stretchAmount);
-        
-        const finalPixelData = new Uint8ClampedArray(imageData.length);
-        for (let i = 0; i < nPixels; i++) {
-            const rgb = convertToRgb(stretchedC1[i], stretchedC2[i], stretchedC3[i], selectedColorspace);
-            const pixelIndex = i * 4;
-            finalPixelData[pixelIndex] = rgb[0];
-            finalPixelData[pixelIndex + 1] = rgb[1];
-            finalPixelData[pixelIndex + 2] = rgb[2];
-            finalPixelData[pixelIndex + 3] = 255;
-        }
-        
-        return finalPixelData;
-    }
-    
-    function downloadImage() {
-        if (!history[historyIndex]) {
-            alert('No image to download');
-            return;
-        }
-        const link = document.createElement('a');
-        link.download = `DStretchAIPro_${Date.now()}.png`;
-        link.href = history[historyIndex];
-        link.click();
-        menuModal.classList.remove('visible');
-    }
-    
-    // === UTILITY FUNCTIONS (Fallback for main thread) ===
-    function calculateMean(arr) {
-        return arr.reduce((sum, val) => sum + val, 0) / arr.length;
-    }
-    
-    function calculateCovarianceMatrix(c1, c2, c3, m1, m2, m3) {
-        const n = c1.length;
-        let cov11 = 0, cov22 = 0, cov33 = 0;
-        let cov12 = 0, cov13 = 0, cov23 = 0;
-        
-        for (let i = 0; i < n; i++) {
-            const d1 = c1[i] - m1;
-            const d2 = c2[i] - m2;
-            const d3 = c3[i] - m3;
-            cov11 += d1 * d1;
-            cov22 += d2 * d2;
-            cov33 += d3 * d3;
-            cov12 += d1 * d2;
-            cov13 += d1 * d3;
-            cov23 += d2 * d3;
-        }
-        
-        const divisor = n - 1;
-        return [
-            [cov11 / divisor, cov12 / divisor, cov13 / divisor],
-            [cov12 / divisor, cov22 / divisor, cov23 / divisor],
-            [cov13 / divisor, cov23 / divisor, cov33 / divisor]
-        ];
-    }
-    
-    function eigenDecomposition(matrix) {
-        try {
-            const { vectors, values } = math.eigs(matrix);
-            return { eigenvectors: vectors, eigenvalues: values };
-        } catch (e) {
-            return {
-                eigenvectors: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-                eigenvalues: [1, 1, 1]
-            };
+            
+            output[dstOff] = pixels[dstOff] + (r - pixels[dstOff]) * amount;
+            output[dstOff + 1] = pixels[dstOff + 1] + (g - pixels[dstOff + 1]) * amount;
+            output[dstOff + 2] = pixels[dstOff + 2] + (b - pixels[dstOff + 2]) * amount;
+            output[dstOff + 3] = pixels[dstOff + 3];
         }
     }
     
-    function performDstretch(c1, c2, c3, stretchAmount) {
-        const meanC1 = calculateMean(c1);
-        const meanC2 = calculateMean(c2);
-        const meanC3 = calculateMean(c3);
-        const covMatrix = calculateCovarianceMatrix(c1, c2, c3, meanC1, meanC2, meanC3);
-        const { eigenvectors, eigenvalues } = eigenDecomposition(covMatrix);
-        
-        let stretchedC1 = [], stretchedC2 = [], stretchedC3 = [];
-        
-        for (let i = 0; i < c1.length; i++) {
-            const v1 = c1[i] - meanC1, v2 = c2[i] - meanC2, v3 = c3[i] - meanC3;
-            let p1 = v1 * eigenvectors[0][0] + v2 * eigenvectors[1][0] + v3 * eigenvectors[2][0];
-            let p2 = v1 * eigenvectors[0][1] + v2 * eigenvectors[1][1] + v3 * eigenvectors[2][1];
-            let p3 = v1 * eigenvectors[0][2] + v2 * eigenvectors[1][2] + v3 * eigenvectors[2][2];
-            p1 *= (stretchAmount / Math.sqrt(Math.abs(eigenvalues[0]) || 1));
-            p2 *= (stretchAmount / Math.sqrt(Math.abs(eigenvalues[1]) || 1));
-            p3 *= (stretchAmount / Math.sqrt(Math.abs(eigenvalues[2]) || 1));
-            stretchedC1[i] = p1 * eigenvectors[0][0] + p2 * eigenvectors[0][1] + p3 * eigenvectors[0][2] + meanC1;
-            stretchedC2[i] = p1 * eigenvectors[1][0] + p2 * eigenvectors[1][1] + p3 * eigenvectors[1][2] + meanC2;
-            stretchedC3[i] = p1 * eigenvectors[2][0] + p2 * eigenvectors[2][1] + p3 * eigenvectors[2][2] + meanC3;
-        }
-        return { stretchedC1, stretchedC2, stretchedC3 };
+    pixels.set(output);
+}
+
+function runDStretchMainThread(imageData, stretchAmount) {
+    const nPixels = imageData.length / 4;
+    let c1 = [], c2 = [], c3 = [];
+    
+    for (let i = 0; i < nPixels; i++) {
+        const r = imageData[i * 4];
+        const g = imageData[i * 4 + 1];
+        const b = imageData[i * 4 + 2];
+        const converted = convertRgbTo(r, g, b, selectedColorspace);
+        c1.push(converted[0]);
+        c2.push(converted[1]);
+        c3.push(converted[2]);
     }
     
-    function convertRgbTo(r, g, b, cs) {
-        switch (cs) {
-            case 'LAB': return rgbToLab(r, g, b);
-            case 'LCH': return rgbToLch(r, g, b);
-            case 'YRE': return [0.299 * r + 0.587 * g + 0.114 * b, r, g];
-            case 'LRE': return [0.2126 * r + 0.7152 * g + 0.0722 * b, r, g];
-            case 'YBK': return [0.299 * r + 0.587 * g + 0.114 * b, b, 255 - g];
-            default: return [r, g, b];
-        }
+    const { stretchedC1, stretchedC2, stretchedC3 } = performDstretch(c1, c2, c3, stretchAmount);
+    
+    const finalPixelData = new Uint8ClampedArray(imageData.length);
+    for (let i = 0; i < nPixels; i++) {
+        const rgb = convertToRgb(stretchedC1[i], stretchedC2[i], stretchedC3[i], selectedColorspace);
+        const pixelIndex = i * 4;
+        finalPixelData[pixelIndex] = rgb[0];
+        finalPixelData[pixelIndex + 1] = rgb[1];
+        finalPixelData[pixelIndex + 2] = rgb[2];
+        finalPixelData[pixelIndex + 3] = 255;
     }
     
-    function convertToRgb(c1, c2, c3, cs) {
-        let rgb;
-        switch (cs) {
-            case 'LAB': rgb = labToRgb(c1, c2, c3); break;
-            case 'LCH': rgb = lchToRgb(c1, c2, c3); break;
-            case 'YRE': rgb = [c2, c3, (c1 - 0.587 * c3 - 0.299 * c2) / 0.114]; break;
-            case 'LRE': rgb = [c2, c3, (c1 - 0.7152 * c3 - 0.2126 * c2) / 0.0722]; break;
-            case 'YBK': rgb = [(c1 - 0.587 * (255 - c3) - 0.114 * c2) / 0.299, 255 - c3, c2]; break;
-            default: rgb = [c1, c2, c3];
-        }
-        return [
-            Math.max(0, Math.min(255, rgb[0])),
-            Math.max(0, Math.min(255, rgb[1])),
-            Math.max(0, Math.min(255, rgb[2]))
-        ];
+    return finalPixelData;
+}
+
+function downloadImage() {
+    if (!history[historyIndex]) {
+        alert('No image to download');
+        return;
+    }
+    const link = document.createElement('a');
+    link.download = `DStretchAIPro_${Date.now()}.png`;
+    link.href = history[historyIndex];
+    link.click();
+    menuModal.classList.remove('visible');
+}
+
+// === UTILITY FUNCTIONS (Fallback for main thread) ===
+function calculateMean(arr) {
+    return arr.reduce((sum, val) => sum + val, 0) / arr.length;
+}
+
+function calculateCovarianceMatrix(c1, c2, c3, m1, m2, m3) {
+    const n = c1.length;
+    let cov11 = 0, cov22 = 0, cov33 = 0;
+    let cov12 = 0, cov13 = 0, cov23 = 0;
+    
+    for (let i = 0; i < n; i++) {
+        const d1 = c1[i] - m1;
+        const d2 = c2[i] - m2;
+        const d3 = c3[i] - m3;
+        cov11 += d1 * d1;
+        cov22 += d2 * d2;
+        cov33 += d3 * d3;
+        cov12 += d1 * d2;
+        cov13 += d1 * d3;
+        cov23 += d2 * d3;
     }
     
-    function rgbToLab(r, g, b) {
-        r /= 255; g /= 255; b /= 255;
-        r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
-        g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
-        b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
-        let x = (r * 0.4124 + g * 0.3576 + b * 0.1805) * 100;
-        let y = (r * 0.2126 + g * 0.7152 + b * 0.0722) * 100;
-        let z = (r * 0.0193 + g * 0.1192 + b * 0.9505) * 100;
-        x /= 95.047; y /= 100; z /= 108.883;
-        x = x > 0.008856 ? Math.cbrt(x) : 7.787 * x + 16 / 116;
-        y = y > 0.008856 ? Math.cbrt(y) : 7.787 * y + 16 / 116;
-        z = z > 0.008856 ? Math.cbrt(z) : 7.787 * z + 16 / 116;
-        return [(116 * y) - 16, 500 * (x - y), 200 * (y - z)];
+    const divisor = n - 1;
+    return [
+        [cov11 / divisor, cov12 / divisor, cov13 / divisor],
+        [cov12 / divisor, cov22 / divisor, cov23 / divisor],
+        [cov13 / divisor, cov23 / divisor, cov33 / divisor]
+    ];
+}
+
+function eigenDecomposition(matrix) {
+    try {
+        const { vectors, values } = math.eigs(matrix);
+        return { eigenvectors: vectors, eigenvalues: values };
+    } catch (e) {
+        return {
+            eigenvectors: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+            eigenvalues: [1, 1, 1]
+        };
     }
+}
+
+function performDstretch(c1, c2, c3, stretchAmount) {
+    const meanC1 = calculateMean(c1);
+    const meanC2 = calculateMean(c2);
+    const meanC3 = calculateMean(c3);
+    const covMatrix = calculateCovarianceMatrix(c1, c2, c3, meanC1, meanC2, meanC3);
+    const { eigenvectors, eigenvalues } = eigenDecomposition(covMatrix);
     
-    function labToRgb(l, a, b_lab) {
-        let y = (l + 16) / 116, x = a / 500 + y, z = y - b_lab / 200;
-        const x3 = x * x * x, y3 = y * y * y, z3 = z * z * z;
-        x = x3 > 0.008856 ? x3 : (x - 16 / 116) / 7.787;
-        y = y3 > 0.008856 ? y3 : (y - 16 / 116) / 7.787;
-        z = z3 > 0.008856 ? z3 : (z - 16 / 116) / 7.787;
-        x *= 95.047; y *= 100; z *= 108.883;
-        x /= 100; y /= 100; z /= 100;
-        let r = x * 3.2406 + y * -1.5372 + z * -0.4986;
-        let g = x * -0.9689 + y * 1.8758 + z * 0.0415;
-        let b = x * 0.0557 + y * -0.2040 + z * 1.0570;
-        r = r > 0.0031308 ? 1.055 * Math.pow(r, 1 / 2.4) - 0.055 : 12.92 * r;
-        g = g > 0.0031308 ? 1.055 * Math.pow(g, 1 / 2.4) - 0.055 : 12.92 * g;
-        b = b > 0.0031308 ? 1.055 * Math.pow(b, 1 / 2.4) - 0.055 : 12.92 * b;
-        return [r * 255, g * 255, b * 255];
+    let stretchedC1 = [], stretchedC2 = [], stretchedC3 = [];
+    
+    for (let i = 0; i < c1.length; i++) {
+        const v1 = c1[i] - meanC1, v2 = c2[i] - meanC2, v3 = c3[i] - meanC3;
+        let p1 = v1 * eigenvectors[0][0] + v2 * eigenvectors[1][0] + v3 * eigenvectors[2][0];
+        let p2 = v1 * eigenvectors[0][1] + v2 * eigenvectors[1][1] + v3 * eigenvectors[2][1];
+        let p3 = v1 * eigenvectors[0][2] + v2 * eigenvectors[1][2] + v3 * eigenvectors[2][2];
+        p1 *= (stretchAmount / Math.sqrt(Math.abs(eigenvalues[0]) || 1));
+        p2 *= (stretchAmount / Math.sqrt(Math.abs(eigenvalues[1]) || 1));
+        p3 *= (stretchAmount / Math.sqrt(Math.abs(eigenvalues[2]) || 1));
+        stretchedC1[i] = p1 * eigenvectors[0][0] + p2 * eigenvectors[0][1] + p3 * eigenvectors[0][2] + meanC1;
+        stretchedC2[i] = p1 * eigenvectors[1][0] + p2 * eigenvectors[1][1] + p3 * eigenvectors[1][2] + meanC2;
+        stretchedC3[i] = p1 * eigenvectors[2][0] + p2 * eigenvectors[2][1] + p3 * eigenvectors[2][2] + meanC3;
     }
-    
-    function rgbToLch(r, g, b) {
-        const lab = rgbToLab(r, g, b);
-        const L = lab[0], a = lab[1], b_lab = lab[2];
-        const C = Math.sqrt(a * a + b_lab * b_lab);
-        let H = Math.atan2(b_lab, a) * (180 / Math.PI);
-        if (H < 0) H += 360;
-        return [L, C, H];
+    return { stretchedC1, stretchedC2, stretchedC3 };
+}
+
+function convertRgbTo(r, g, b, cs) {
+    switch (cs) {
+        case 'LAB': return rgbToLab(r, g, b);
+        case 'LCH': return rgbToLch(r, g, b);
+        case 'YRE': return [0.299 * r + 0.587 * g + 0.114 * b, r, g];
+        case 'LRE': return [0.2126 * r + 0.7152 * g + 0.0722 * b, r, g];
+        case 'YBK': return [0.299 * r + 0.587 * g + 0.114 * b, b, 255 - g];
+        default: return [r, g, b];
     }
-    
-    function lchToRgb(L, C, H) {
-        const H_rad = H * (Math.PI / 180);
-        const a = C * Math.cos(H_rad);
-        const b_lab = C * Math.sin(H_rad);
-        return labToRgb(L, a, b_lab);
+}
+
+function convertToRgb(c1, c2, c3, cs) {
+    let rgb;
+    switch (cs) {
+        case 'LAB': rgb = labToRgb(c1, c2, c3); break;
+        case 'LCH': rgb = lchToRgb(c1, c2, c3); break;
+        case 'YRE': rgb = [c2, c3, (c1 - 0.587 * c3 - 0.299 * c2) / 0.114]; break;
+        case 'LRE': rgb = [c2, c3, (c1 - 0.7152 * c3 - 0.2126 * c2) / 0.0722]; break;
+        case 'YBK': rgb = [(c1 - 0.587 * (255 - c3) - 0.114 * c2) / 0.299, 255 - c3, c2]; break;
+        default: rgb = [c1, c2, c3];
     }
+    return [
+        Math.max(0, Math.min(255, rgb[0])),
+        Math.max(0, Math.min(255, rgb[1])),
+        Math.max(0, Math.min(255, rgb[2]))
+    ];
+}
+
+function rgbToLab(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+    g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+    b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+    let x = (r * 0.4124 + g * 0.3576 + b * 0.1805) * 100;
+    let y = (r * 0.2126 + g * 0.7152 + b * 0.0722) * 100;
+    let z = (r * 0.0193 + g * 0.1192 + b * 0.9505) * 100;
+    x /= 95.047; y /= 100; z /= 108.883;
+    x = x > 0.008856 ? Math.cbrt(x) : 7.787 * x + 16 / 116;
+    y = y > 0.008856 ? Math.cbrt(y) : 7.787 * y + 16 / 116;
+    z = z > 0.008856 ? Math.cbrt(z) : 7.787 * z + 16 / 116;
+    return [(116 * y) - 16, 500 * (x - y), 200 * (y - z)];
+}
+
+function labToRgb(l, a, b_lab) {
+    let y = (l + 16) / 116, x = a / 500 + y, z = y - b_lab / 200;
+    const x3 = x * x * x, y3 = y * y * y, z3 = z * z * z;
+    x = x3 > 0.008856 ? x3 : (x - 16 / 116) / 7.787;
+    y = y3 > 0.008856 ? y3 : (y - 16 / 116) / 7.787;
+    z = z3 > 0.008856 ? z3 : (z - 16 / 116) / 7.787;
+    x *= 95.047; y *= 100; z *= 108.883;
+    x /= 100; y /= 100; z /= 100;
+    let r = x * 3.2406 + y * -1.5372 + z * -0.4986;
+    let g = x * -0.9689 + y * 1.8758 + z * 0.0415;
+    let b = x * 0.0557 + y * -0.2040 + z * 1.0570;
+    r = r > 0.0031308 ? 1.055 * Math.pow(r, 1 / 2.4) - 0.055 : 12.92 * r;
+    g = g > 0.0031308 ? 1.055 * Math.pow(g, 1 / 2.4) - 0.055 : 12.92 * g;
+    b = b > 0.0031308 ? 1.055 * Math.pow(b, 1 / 2.4) - 0.055 : 12.92 * b;
+    return [r * 255, g * 255, b * 255];
+}
+
+function rgbToLch(r, g, b) {
+    const lab = rgbToLab(r, g, b);
+    const L = lab[0], a = lab[1], b_lab = lab[2];
+    const C = Math.sqrt(a * a + b_lab * b_lab);
+    let H = Math.atan2(b_lab, a) * (180 / Math.PI);
+    if (H < 0) H += 360;
+    return [L, C, H];
+}
+
+function lchToRgb(L, C, H) {
+    const H_rad = H * (Math.PI / 180);
+    const a = C * Math.cos(H_rad);
+    const b_lab = C * Math.sin(H_rad);
+    return labToRgb(L, a, b_lab);
+}
+
+initialize();
     
-    initialize();
-});(255, r));
-            pixels[i + 1] = Math.max(0, Math.min
+});
