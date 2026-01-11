@@ -31,6 +31,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const enableEdges = document.getElementById('enable-edges');
     const enableNormals = document.getElementById('enable-normals');
     const enableICA = document.getElementById('enable-ica');
+    const bypassDStretch = document.getElementById('bypass-dstretch');
+    
+    // Zoom controls
+    const zoomControls = document.querySelector('.zoom-controls');
+    const zoomInBtn = document.getElementById('zoom-in-btn');
+    const zoomOutBtn = document.getElementById('zoom-out-btn');
+    const zoomResetBtn = document.getElementById('zoom-reset-btn');
+    const zoomLevelDisplay = document.getElementById('zoom-level');
     
     // Navigation
     const navTabs = document.querySelectorAll('.nav-tab');
@@ -52,6 +60,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let isProcessing = false;
     let processingQueue = null;
     let worker = null;
+    
+    // Zoom state
+    let zoomLevel = 1;
+    let panX = 0;
+    let panY = 0;
+    let isPanning = false;
+    let startX = 0;
+    let startY = 0;
     
     // === WEB WORKER INITIALIZATION ===
     function initWorker() {
@@ -257,11 +273,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         // Toggle change handlers
-        [enableEdges, enableNormals, enableICA].forEach(toggle => {
+        [enableEdges, enableNormals, enableICA, bypassDStretch].forEach(toggle => {
             toggle.addEventListener('change', () => {
                 if (originalImageSrc) processImage(false);
             });
         });
+        
+        // Zoom controls
+        zoomInBtn.addEventListener('click', zoomIn);
+        zoomOutBtn.addEventListener('click', zoomOut);
+        zoomResetBtn.addEventListener('click', resetZoom);
+        
+        // Show/hide zoom controls when image is loaded
+        imageDisplay.addEventListener('load', () => {
+            if (originalImageSrc) {
+                zoomControls.classList.add('visible');
+            }
+        });
+        
+        // Pan functionality
+        imageDisplay.addEventListener('mousedown', startPan);
+        imageDisplay.addEventListener('touchstart', startPan);
+        document.addEventListener('mousemove', doPan);
+        document.addEventListener('touchmove', doPan);
+        document.addEventListener('mouseup', endPan);
+        document.addEventListener('touchend', endPan);
         
         // Comparison (tap and hold)
         let isComparing = false;
@@ -312,7 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateSliderValue(stretchSlider);
                     updateSliderValue(decorrelationSlider);
                 } else if (panel === 'adjust') {
-                    document.querySelectorAll('#adjust-panel input[type="range"]').forEach(slider => {
+                    document.querySelectorAll('#adjust-panel input[type=\"range\"]').forEach(slider => {
                         slider.value = 0;
                         updateSliderValue(slider);
                     });
@@ -339,19 +375,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 menuModal.classList.remove('visible');
             }
         });
-        
-        console.log('=== Initialization Complete ===');
     };
     
     // === IMAGE UPLOAD ===
     function handleImageUpload(event) {
-        console.log('=== FILE SELECTED ===');
         const file = event.target.files[0];
         if (!file) return;
         
         const reader = new FileReader();
         reader.onload = e => {
-            console.log('=== IMAGE LOADED ===');
             originalImageSrc = e.target.result;
             history = [originalImageSrc];
             historyIndex = 0;
@@ -434,6 +466,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Step 4: Run DStretch (potentially slow, use worker if available)
                 const stretchAmount = parseFloat(stretchSlider.value);
+                
+                // Check if DStretch is bypassed
+                if (!bypassDStretch.checked) {
+                    // Skip DStretch, just apply processed data
+                    ctx.putImageData(imageData, 0, 0);
+                    const finalDataUrl = canvas.toDataURL('image/png', 0.95);
+                    imageDisplay.src = finalDataUrl;
+                    updateHistory(finalDataUrl);
+                    isProcessing = false;
+                    hideProcessing();
+                    return;
+                }
                 
                 if (worker && !enableICA.checked) {
                     // Offload to worker
@@ -744,7 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
             finalPixelData[i * 4 + 3] = 255;
         }
         
-        return finalPixelData
+        return finalPixelData;
     }
     
     function applyAdjustments(pixels) {
@@ -1027,4 +1071,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     initialize();
-});
+});(255, r));
+            pixels[i + 1] = Math.max(0, Math.min
