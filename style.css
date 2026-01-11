@@ -230,8 +230,10 @@ canvas {
 /* Bypass Toggle Styling */
 .bypass-toggle {
     margin-bottom: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--border-color);
+    padding: 12px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 10px;
+    background-color: var(--bg-tertiary);
 }
 
 .bypass-toggle span {
@@ -314,6 +316,8 @@ canvas {
     flex-direction: column;
     border-top: 0.5px solid var(--border-color);
     flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
 }
 
 .control-panel {
@@ -323,11 +327,16 @@ canvas {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     animation: slideUp 0.3s ease-out;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: var(--nav-height);
+    background-color: var(--bg-secondary);
 }
 
 .control-panel.active {
-    display: flex;
-    flex-direction: column;
+    display: block;
 }
 
 @keyframes slideUp {
@@ -372,8 +381,8 @@ canvas {
 
 /* Slider Redesign */
 .slider-grid {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 16px;
 }
 
@@ -459,7 +468,11 @@ input[type="range"]:disabled {
     border-top: 0.5px solid var(--border-color);
     flex-shrink: 0;
     background-color: var(--bg-secondary);
-    position: relative;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
 }
 
 .nav-tab {
