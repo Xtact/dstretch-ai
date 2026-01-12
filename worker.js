@@ -1,267 +1,252 @@
-// Web Worker for DStretch processing
-// This offloads heavy computation from the main thread
-
-self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.7.0/math.min.js');
+// DStretch Pro Plus+ - Web Worker for Image Processing
+// Handles heavy image processing tasks off the main thread
 
 self.onmessage = function(e) {
     const { type, data } = e.data;
     
-    if (type === 'PROCESS_DSTRETCH') {
-        try {
-            const result = processDStretch(data);
-            self.postMessage({ type: 'DSTRETCH_COMPLETE', data: result });
-        } catch (error) {
-            self.postMessage({ type: 'DSTRETCH_ERROR', error: error.message });
-        }
+    switch(type) {
+        case 'applyDStretch':
+            applyDStretch(data);
+            break;
+        case 'applyAdjustments':
+            applyAdjustments(data);
+            break;
+        case 'autoEnhance':
+            autoEnhance(data);
+            break;
+        default:
+            console.warn('Unknown worker task:', type);
     }
 };
 
-function processDStretch(data) {
-    const { imageData, colorspace, stretchAmount } = data;
-    const nPixels = imageData.length / 4;
-    let c1 = [], c2 = [], c3 = [];
-
-    // Convert pixels to selected colorspace
-    for (let i = 0; i < nPixels; i++) {
-        const r = imageData[i * 4];
-        const g = imageData[i * 4 + 1];
-        const b = imageData[i * 4 + 2];
-        const converted = convertRgbTo(r, g, b, colorspace);
-        c1.push(converted[0]);
-        c2.push(converted[1]);
-        c3.push(converted[2]);
+function applyDStretch(data) {
+    const { imageData, colorspace } = data;
+    const pixels = imageData.data;
+    
+    for (let i = 0; i < pixels.length; i += 4) {
+        const r = pixels[i];
+        const g = pixels[i + 1];
+        const b = pixels[i + 2];
+        
+        let newR, newG, newB;
+        
+        switch (colorspace) {
+            case 'yre': // Yellow-Red Enhancement
+                newR = Math.min(255, r * 1.3);
+                newG = Math.min(255, g * 1.1);
+                newB = b * 0.7;
+                break;
+                
+            case 'yye': // Yellow Enhancement
+                newR = Math.min(255, r * 1.2);
+                newG = Math.min(255, g * 1.2);
+                newB = b * 0.8;
+                break;
+                
+            case 'crgb': // Color RGB
+                newR = Math.min(255, (r - g - b + 510) / 2);
+                newG = Math.min(255, (g - r - b + 510) / 2);
+                newB = Math.min(255, (b - r - g + 510) / 2);
+                break;
+                
+            case 'lre': // Lab Red Enhancement
+                const l = 0.299 * r + 0.587 * g + 0.114 * b;
+                newR = Math.min(255, l * 0.5 + r * 0.5);
+                newG = g * 0.8;
+                newB = b * 0.8;
+                break;
+                
+            case 'lds': // Lab Desaturation
+                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                newR = gray;
+                newG = gray;
+                newB = gray;
+                break;
+                
+            default:
+                newR = r;
+                newG = g;
+                newB = b;
+        }
+        
+        pixels[i] = Math.max(0, Math.min(255, newR));
+        pixels[i + 1] = Math.max(0, Math.min(255, newG));
+        pixels[i + 2] = Math.max(0, Math.min(255, newB));
     }
     
-    // Perform DStretch algorithm
-    const { stretchedC1, stretchedC2, stretchedC3 } = performDstretch(c1, c2, c3, stretchAmount);
-
-    // Convert back to RGB
-    const finalPixelData = new Uint8ClampedArray(imageData.length);
-    for (let i = 0; i < nPixels; i++) {
-        const rgb = convertToRgb(stretchedC1[i], stretchedC2[i], stretchedC3[i], colorspace);
-        const pixelIndex = i * 4;
-        finalPixelData[pixelIndex] = rgb[0];
-        finalPixelData[pixelIndex + 1] = rgb[1];
-        finalPixelData[pixelIndex + 2] = rgb[2];
-        finalPixelData[pixelIndex + 3] = 255;
-    }
-    
-    return finalPixelData;
+    self.postMessage({
+        type: 'dstretchComplete',
+        imageData: imageData
+    }, [imageData.data.buffer]);
 }
 
-function performDstretch(c1, c2, c3, stretchAmount) {
-    const meanC1 = calculateMean(c1);
-    const meanC2 = calculateMean(c2);
-    const meanC3 = calculateMean(c3);
+function applyAdjustments(data) {
+    const { imageData, adjustments } = data;
+    const pixels = imageData.data;
+    const { exposure, contrast, saturation, sharpness } = adjustments;
     
-    const covMatrix = calculateCovarianceMatrix(c1, c2, c3, meanC1, meanC2, meanC3);
-    const { eigenvectors, eigenvalues } = eigenDecomposition(covMatrix);
+    const exposureFactor = 1 + exposure / 100;
+    const contrastFactor = (contrast + 100) / 100;
+    const saturationFactor = 1 + saturation / 100;
     
-    let stretchedC1 = [], stretchedC2 = [], stretchedC3 = [];
-
-    for (let i = 0; i < c1.length; i++) {
-        const v1 = c1[i] - meanC1;
-        const v2 = c2[i] - meanC2;
-        const v3 = c3[i] - meanC3;
+    for (let i = 0; i < pixels.length; i += 4) {
+        let r = pixels[i];
+        let g = pixels[i + 1];
+        let b = pixels[i + 2];
         
-        // Project onto eigenvector basis
-        let p1 = v1 * eigenvectors[0][0] + v2 * eigenvectors[1][0] + v3 * eigenvectors[2][0];
-        let p2 = v1 * eigenvectors[0][1] + v2 * eigenvectors[1][1] + v3 * eigenvectors[2][1];
-        let p3 = v1 * eigenvectors[0][2] + v2 * eigenvectors[1][2] + v3 * eigenvectors[2][2];
+        // Apply exposure
+        r *= exposureFactor;
+        g *= exposureFactor;
+        b *= exposureFactor;
         
-        // Apply stretch
-        p1 *= (stretchAmount / Math.sqrt(Math.abs(eigenvalues[0]) || 1));
-        p2 *= (stretchAmount / Math.sqrt(Math.abs(eigenvalues[1]) || 1));
-        p3 *= (stretchAmount / Math.sqrt(Math.abs(eigenvalues[2]) || 1));
+        // Apply contrast
+        r = ((r / 255 - 0.5) * contrastFactor + 0.5) * 255;
+        g = ((g / 255 - 0.5) * contrastFactor + 0.5) * 255;
+        b = ((b / 255 - 0.5) * contrastFactor + 0.5) * 255;
         
-        // Project back to original space
-        stretchedC1[i] = p1 * eigenvectors[0][0] + p2 * eigenvectors[0][1] + p3 * eigenvectors[0][2] + meanC1;
-        stretchedC2[i] = p1 * eigenvectors[1][0] + p2 * eigenvectors[1][1] + p3 * eigenvectors[1][2] + meanC2;
-        stretchedC3[i] = p1 * eigenvectors[2][0] + p2 * eigenvectors[2][1] + p3 * eigenvectors[2][2] + meanC3;
+        // Apply saturation
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = gray + (r - gray) * saturationFactor;
+        g = gray + (g - gray) * saturationFactor;
+        b = gray + (b - gray) * saturationFactor;
+        
+        pixels[i] = Math.max(0, Math.min(255, r));
+        pixels[i + 1] = Math.max(0, Math.min(255, g));
+        pixels[i + 2] = Math.max(0, Math.min(255, b));
     }
     
-    return { stretchedC1, stretchedC2, stretchedC3 };
-}
-
-function calculateMean(arr) {
-    return arr.reduce((sum, val) => sum + val, 0) / arr.length;
-}
-
-function calculateCovarianceMatrix(c1, c2, c3, m1, m2, m3) {
-    const n = c1.length;
-    let cov11 = 0, cov22 = 0, cov33 = 0;
-    let cov12 = 0, cov13 = 0, cov23 = 0;
-    
-    for (let i = 0; i < n; i++) {
-        const d1 = c1[i] - m1;
-        const d2 = c2[i] - m2;
-        const d3 = c3[i] - m3;
-        
-        cov11 += d1 * d1;
-        cov22 += d2 * d2;
-        cov33 += d3 * d3;
-        cov12 += d1 * d2;
-        cov13 += d1 * d3;
-        cov23 += d2 * d3;
+    // Apply sharpness if needed
+    if (sharpness > 0) {
+        applySharpness(imageData, sharpness / 100);
     }
     
-    const divisor = n - 1;
-    return [
-        [cov11 / divisor, cov12 / divisor, cov13 / divisor],
-        [cov12 / divisor, cov22 / divisor, cov23 / divisor],
-        [cov13 / divisor, cov23 / divisor, cov33 / divisor]
+    self.postMessage({
+        type: 'adjustmentsComplete',
+        imageData: imageData
+    }, [imageData.data.buffer]);
+}
+
+function applySharpness(imageData, amount) {
+    const width = imageData.width;
+    const height = imageData.height;
+    const pixels = imageData.data;
+    const original = new Uint8ClampedArray(pixels);
+    
+    const kernel = [
+        0, -1, 0,
+        -1, 5, -1,
+        0, -1, 0
     ];
-}
-
-function eigenDecomposition(matrix) {
-    try {
-        const { vectors, values } = math.eigs(matrix);
-        return { eigenvectors: vectors, eigenvalues: values };
-    } catch (e) {
-        // Fallback to identity if decomposition fails
-        return {
-            eigenvectors: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-            eigenvalues: [1, 1, 1]
-        };
+    
+    for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+            for (let c = 0; c < 3; c++) {
+                let sum = 0;
+                for (let ky = -1; ky <= 1; ky++) {
+                    for (let kx = -1; kx <= 1; kx++) {
+                        const idx = ((y + ky) * width + (x + kx)) * 4 + c;
+                        sum += original[idx] * kernel[(ky + 1) * 3 + (kx + 1)];
+                    }
+                }
+                const idx = (y * width + x) * 4 + c;
+                pixels[idx] = original[idx] * (1 - amount) + sum * amount;
+            }
+        }
     }
 }
 
-function convertRgbTo(r, g, b, colorspace) {
-    switch (colorspace) {
-        case 'LAB':
-            return rgbToLab(r, g, b);
-        case 'LCH':
-            return rgbToLch(r, g, b);
-        case 'YRE':
-            return [0.299 * r + 0.587 * g + 0.114 * b, r, g];
-        case 'LRE':
-            return [0.2126 * r + 0.7152 * g + 0.0722 * b, r, g];
-        case 'CRGB':
-            return [r, g, b];
-        case 'YBK':
-            return [0.299 * r + 0.587 * g + 0.114 * b, b, 255 - g];
-        default: // RGB
-            return [r, g, b];
+function autoEnhance(data) {
+    const { imageData } = data;
+    
+    // First apply DStretch YRE
+    applyDStretch({
+        imageData: imageData,
+        colorspace: 'yre'
+    });
+    
+    // Then apply optimal adjustments
+    applyAdjustments({
+        imageData: imageData,
+        adjustments: {
+            exposure: 0,
+            contrast: 20,
+            saturation: 15,
+            sharpness: 10
+        }
+    });
+    
+    self.postMessage({
+        type: 'autoEnhanceComplete',
+        imageData: imageData
+    }, [imageData.data.buffer]);
+}
+
+// Helper function for histogram analysis (for future auto-enhance improvements)
+function analyzeHistogram(imageData) {
+    const pixels = imageData.data;
+    const histogram = {
+        r: new Array(256).fill(0),
+        g: new Array(256).fill(0),
+        b: new Array(256).fill(0),
+        luminance: new Array(256).fill(0)
+    };
+    
+    for (let i = 0; i < pixels.length; i += 4) {
+        const r = pixels[i];
+        const g = pixels[i + 1];
+        const b = pixels[i + 2];
+        const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+        
+        histogram.r[r]++;
+        histogram.g[g]++;
+        histogram.b[b]++;
+        histogram.luminance[lum]++;
     }
+    
+    return histogram;
 }
 
-function convertToRgb(c1, c2, c3, colorspace) {
-    let rgb;
-    switch (colorspace) {
-        case 'LAB':
-            rgb = labToRgb(c1, c2, c3);
-            break;
-        case 'LCH':
-            rgb = lchToRgb(c1, c2, c3);
-            break;
-        case 'YRE':
-            rgb = [c2, c3, (c1 - 0.587 * c3 - 0.299 * c2) / 0.114];
-            break;
-        case 'LRE':
-            rgb = [c2, c3, (c1 - 0.7152 * c3 - 0.2126 * c2) / 0.0722];
-            break;
-        case 'CRGB':
-            rgb = [c1, c2, c3];
-            break;
-        case 'YBK':
-            rgb = [(c1 - 0.587 * (255 - c3) - 0.114 * c2) / 0.299, 255 - c3, c2];
-            break;
-        default: // RGB
-            rgb = [c1, c2, c3];
+// Helper function to find optimal enhancement parameters
+function findOptimalParameters(histogram) {
+    // Calculate mean luminance
+    let totalPixels = 0;
+    let sumLuminance = 0;
+    
+    for (let i = 0; i < 256; i++) {
+        totalPixels += histogram.luminance[i];
+        sumLuminance += i * histogram.luminance[i];
     }
     
-    // Clamp values
-    return [
-        Math.max(0, Math.min(255, rgb[0])),
-        Math.max(0, Math.min(255, rgb[1])),
-        Math.max(0, Math.min(255, rgb[2]))
-    ];
+    const meanLuminance = sumLuminance / totalPixels;
+    
+    // Suggest exposure adjustment based on mean luminance
+    let exposure = 0;
+    if (meanLuminance < 100) {
+        exposure = Math.round((100 - meanLuminance) / 2);
+    } else if (meanLuminance > 155) {
+        exposure = -Math.round((meanLuminance - 155) / 2);
+    }
+    
+    // Suggest contrast based on histogram spread
+    const stdDev = calculateStdDev(histogram.luminance, meanLuminance);
+    let contrast = stdDev < 50 ? 30 : 15;
+    
+    return {
+        exposure: Math.max(-50, Math.min(50, exposure)),
+        contrast: contrast,
+        saturation: 15,
+        sharpness: 10
+    };
 }
 
-function rgbToLab(r, g, b) {
-    // Normalize RGB values
-    r /= 255;
-    g /= 255;
-    b /= 255;
+function calculateStdDev(histogram, mean) {
+    let totalPixels = 0;
+    let variance = 0;
     
-    // Apply gamma correction
-    r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
-    g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
-    b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+    for (let i = 0; i < 256; i++) {
+        totalPixels += histogram[i];
+        variance += histogram[i] * Math.pow(i - mean, 2);
+    }
     
-    // Convert to XYZ
-    let x = (r * 0.4124 + g * 0.3576 + b * 0.1805) * 100;
-    let y = (r * 0.2126 + g * 0.7152 + b * 0.0722) * 100;
-    let z = (r * 0.0193 + g * 0.1192 + b * 0.9505) * 100;
-    
-    // Normalize for D65 illuminant
-    x /= 95.047;
-    y /= 100.000;
-    z /= 108.883;
-    
-    // Apply Lab transformation
-    x = x > 0.008856 ? Math.cbrt(x) : (7.787 * x + 16 / 116);
-    y = y > 0.008856 ? Math.cbrt(y) : (7.787 * y + 16 / 116);
-    z = z > 0.008856 ? Math.cbrt(z) : (7.787 * z + 16 / 116);
-    
-    return [(116 * y) - 16, 500 * (x - y), 200 * (y - z)];
-}
-
-function labToRgb(l, a, b_lab) {
-    let y = (l + 16) / 116;
-    let x = a / 500 + y;
-    let z = y - b_lab / 200;
-    
-    const x3 = x * x * x;
-    const y3 = y * y * y;
-    const z3 = z * z * z;
-    
-    x = x3 > 0.008856 ? x3 : (x - 16 / 116) / 7.787;
-    y = y3 > 0.008856 ? y3 : (y - 16 / 116) / 7.787;
-    z = z3 > 0.008856 ? z3 : (z - 16 / 116) / 7.787;
-    
-    x *= 95.047;
-    y *= 100.000;
-    z *= 108.883;
-    
-    x /= 100;
-    y /= 100;
-    z /= 100;
-    
-    // Convert XYZ to RGB
-    let r = x * 3.2406 + y * -1.5372 + z * -0.4986;
-    let g = x * -0.9689 + y * 1.8758 + z * 0.0415;
-    let b = x * 0.0557 + y * -0.2040 + z * 1.0570;
-    
-    // Apply gamma correction
-    r = r > 0.0031308 ? 1.055 * Math.pow(r, 1 / 2.4) - 0.055 : 12.92 * r;
-    g = g > 0.0031308 ? 1.055 * Math.pow(g, 1 / 2.4) - 0.055 : 12.92 * g;
-    b = b > 0.0031308 ? 1.055 * Math.pow(b, 1 / 2.4) - 0.055 : 12.92 * b;
-    
-    return [r * 255, g * 255, b * 255];
-}
-
-function rgbToLch(r, g, b) {
-    // Convert RGB to LAB first
-    const lab = rgbToLab(r, g, b);
-    const L = lab[0];
-    const a = lab[1];
-    const b_lab = lab[2];
-    
-    // Convert LAB to LCH (cylindrical representation)
-    const C = Math.sqrt(a * a + b_lab * b_lab);
-    let H = Math.atan2(b_lab, a) * (180 / Math.PI);
-    if (H < 0) H += 360;
-    
-    return [L, C, H];
-}
-
-function lchToRgb(L, C, H) {
-    // Convert LCH to LAB
-    const H_rad = H * (Math.PI / 180);
-    const a = C * Math.cos(H_rad);
-    const b_lab = C * Math.sin(H_rad);
-    
-    // Convert LAB to RGB
-    return labToRgb(L, a, b_lab);
+    return Math.sqrt(variance / totalPixels);
 }
