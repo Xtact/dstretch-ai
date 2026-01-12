@@ -160,49 +160,29 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // === INITIALIZATION ===
     const initialize = () => {
-        console.log('=== DStretch AI Pro Initializing ===');
+        console.log('=== DStretch Pro Plus+ Initializing ===');
         console.log('Image display element:', imageDisplay);
         console.log('Image loader element:', imageLoader);
         console.log('Nav tabs found:', navTabs.length);
         
         initWorker();
         
-        // Navigation tabs - SIMPLIFIED AND DIRECT
+        // Navigation tabs - FIXED SIMPLIFIED VERSION
         console.log('Setting up navigation...');
         navTabs.forEach((tab, index) => {
             console.log(`Setting up tab ${index}:`, tab.dataset.panel);
             
-            // Remove any existing listeners
-            const newTab = tab.cloneNode(true);
-            tab.parentNode.replaceChild(newTab, tab);
-            
-            newTab.addEventListener('click', function(e) {
+            tab.addEventListener('click', function(e) {
                 console.log('=== TAB CLICKED ===', this.dataset.panel);
-                e.preventDefault();
-                e.stopPropagation();
                 
-                // Get fresh references
-                const allTabs = document.querySelectorAll('.nav-tab');
-                const allPanels = document.querySelectorAll('.control-panel');
                 const panelId = this.dataset.panel;
                 
-                console.log('Switching to panel:', panelId);
-                
                 // Remove all active classes
-                allTabs.forEach(t => {
-                    t.classList.remove('active');
-                    console.log('Removed active from tab');
-                });
-                allPanels.forEach(p => {
-                    p.classList.remove('active');
-                    console.log('Removed active from panel');
-                });
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.control-panel').forEach(p => p.classList.remove('active'));
                 
-                // Add active to this tab
+                // Add active to clicked tab and corresponding panel
                 this.classList.add('active');
-                console.log('Added active to clicked tab');
-                
-                // Show panel
                 const targetPanel = document.getElementById(panelId);
                 if (targetPanel) {
                     targetPanel.classList.add('active');
@@ -210,44 +190,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     console.error('PANEL NOT FOUND:', panelId);
                 }
-            }, true); // Use capture phase
+            });
         });
         
-        // Image upload - SIMPLIFIED AND DIRECT
+        // Image upload - COMPLETELY SIMPLIFIED
         console.log('Setting up image upload...');
         
-        // Single unified click handler
-        const handleImageClick = (e) => {
-            // Don't trigger if clicking zoom controls
-            if (e.target.closest('.zoom-controls')) {
-                console.log('Clicked zoom controls, ignoring');
-                return;
-            }
-            
-            // Don't trigger if panning
-            if (isPanning || zoomLevel > 1) {
-                console.log('Panning or zoomed, ignoring upload click');
-                return;
-            }
-            
-            console.log('=== TRIGGERING IMAGE UPLOAD ===');
-            e.preventDefault();
-            e.stopPropagation();
+        const triggerUpload = () => {
+            console.log('=== TRIGGERING UPLOAD ===');
             imageLoader.click();
         };
         
-        // Apply to all clickable areas
-        imageDisplay.addEventListener('click', handleImageClick, false);
-        
-        const container = document.querySelector('.image-container');
-        if (container) {
-            container.addEventListener('click', handleImageClick, false);
-        }
-        
-        const workspace = document.querySelector('.image-workspace');
-        if (workspace) {
-            workspace.addEventListener('click', handleImageClick, false);
-        }
+        // Make entire workspace clickable
+        workspace.addEventListener('click', (e) => {
+            // Ignore if clicking on zoom controls
+            if (e.target.closest('.zoom-controls')) return;
+            // Ignore if zoomed and panning
+            if (zoomLevel > 1 && isPanning) return;
+            
+            console.log('Workspace clicked - triggering upload');
+            triggerUpload();
+        });
         
         imageLoader.addEventListener('change', handleImageUpload);
         
@@ -293,15 +256,53 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // Pan functionality
-        imageDisplay.addEventListener('mousedown', startPan, false);
-        imageDisplay.addEventListener('touchstart', startPan, { passive: false });
-        document.addEventListener('mousemove', doPan, false);
-        document.addEventListener('touchmove', doPan, { passive: false });
-        document.addEventListener('mouseup', endPan, false);
-        document.addEventListener('touchend', endPan, false);
+        // Pan functionality - SIMPLIFIED
+        let panStartX = 0, panStartY = 0, lastPanX = 0, lastPanY = 0;
         
-        // Comparison (tap and hold) - separate from pan
+        imageDisplay.addEventListener('mousedown', (e) => {
+            if (zoomLevel <= 1) return;
+            if (e.target.closest('.zoom-controls')) return;
+            
+            e.preventDefault();
+            isPanning = true;
+            panStartX = e.clientX;
+            panStartY = e.clientY;
+            lastPanX = panX;
+            lastPanY = panY;
+        });
+        
+        imageDisplay.addEventListener('touchstart', (e) => {
+            if (zoomLevel <= 1) return;
+            if (e.target.closest('.zoom-controls')) return;
+            
+            e.preventDefault();
+            isPanning = true;
+            panStartX = e.touches[0].clientX;
+            panStartY = e.touches[0].clientY;
+            lastPanX = panX;
+            lastPanY = panY;
+        }, { passive: false });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isPanning || zoomLevel <= 1) return;
+            e.preventDefault();
+            panX = lastPanX + (e.clientX - panStartX);
+            panY = lastPanY + (e.clientY - panStartY);
+            applyZoom();
+        });
+        
+        document.addEventListener('touchmove', (e) => {
+            if (!isPanning || zoomLevel <= 1) return;
+            e.preventDefault();
+            panX = lastPanX + (e.touches[0].clientX - panStartX);
+            panY = lastPanY + (e.touches[0].clientY - panStartY);
+            applyZoom();
+        }, { passive: false });
+        
+        document.addEventListener('mouseup', () => { isPanning = false; });
+        document.addEventListener('touchend', () => { isPanning = false; });
+        
+        // Comparison (long press only, separate from clicks)
         let isComparing = false;
         let compareTimeout = null;
         
@@ -481,7 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const stretchAmount = parseFloat(stretchSlider.value);
                 
                 // Check if DStretch is bypassed
-                if (!bypassDStretch.checked) {
+                if (bypassDStretch.checked) {
                     // Skip DStretch, just apply processed data
                     ctx.putImageData(imageData, 0, 0);
                     const finalDataUrl = canvas.toDataURL('image/png', 0.95);
