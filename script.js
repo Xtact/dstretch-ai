@@ -54,20 +54,32 @@ class DStretchProPlus {
     }
 
     setupEventListeners() {
-        // Upload functionality
+        // Upload functionality - FIXED
         const imageWorkspace = document.getElementById('imageWorkspace');
         const imageInput = document.getElementById('imageInput');
+        const uploadPrompt = imageWorkspace.querySelector('.upload-prompt');
         
-        imageWorkspace.addEventListener('click', (e) => {
-            if (!this.originalImage && !e.target.closest('button')) {
+        // Click on workspace or upload prompt to upload
+        const triggerUpload = (e) => {
+            if (!this.originalImage) {
+                e.preventDefault();
                 e.stopPropagation();
                 imageInput.click();
             }
-        });
+        };
+        
+        imageWorkspace.addEventListener('click', triggerUpload);
+        if (uploadPrompt) {
+            uploadPrompt.addEventListener('click', triggerUpload);
+        }
         
         imageInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (file) this.loadImage(file);
+            if (file) {
+                this.loadImage(file);
+                // Reset input to allow uploading same file again
+                e.target.value = '';
+            }
         });
 
         // Drag and drop
@@ -166,6 +178,18 @@ class DStretchProPlus {
         document.getElementById('closeCameraBtn').addEventListener('click', () => this.closeCamera());
         document.getElementById('cancelCameraBtn').addEventListener('click', () => this.closeCamera());
         document.getElementById('captureBtn').addEventListener('click', () => this.capturePhoto());
+        
+        // Window resize handler to re-optimize canvas size
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            if (this.originalImage) {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    this.setupCanvas();
+                    this.drawCanvas();
+                }, 250);
+            }
+        });
     }
 
     setupComparisonHandlers() {
@@ -330,19 +354,27 @@ class DStretchProPlus {
 
     setupCanvas() {
         const container = this.canvas.parentElement;
+        
+        // Get actual available space (accounting for any padding/margins)
         const containerWidth = container.clientWidth;
         const containerHeight = container.clientHeight;
         
+        // Calculate image aspect ratio
         const imgAspect = this.originalImage.width / this.originalImage.height;
         const containerAspect = containerWidth / containerHeight;
         
+        // Maximize canvas to fill container while maintaining aspect ratio
         if (imgAspect > containerAspect) {
+            // Image is wider - fit to width
             this.canvas.width = containerWidth;
             this.canvas.height = containerWidth / imgAspect;
         } else {
+            // Image is taller - fit to height
             this.canvas.height = containerHeight;
             this.canvas.width = containerHeight * imgAspect;
         }
+        
+        console.log('Canvas sized:', this.canvas.width, 'x', this.canvas.height);
     }
 
     drawCanvas() {
