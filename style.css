@@ -99,8 +99,10 @@ body {
     justify-content: center;
     position: relative;
     cursor: pointer;
-    /* Remove any padding that might limit size */
     padding: 0;
+    /* Ensure clicks work */
+    pointer-events: auto;
+    touch-action: manipulation;
 }
 
 .image-workspace.drag-over {
@@ -118,16 +120,20 @@ body {
     padding: 32px;
     cursor: pointer;
     user-select: none;
-    pointer-events: auto; /* Ensure it's clickable */
+    /* Make sure this is clickable */
+    pointer-events: auto;
+    z-index: 10;
 }
 
 .upload-prompt svg {
     opacity: 0.5;
+    pointer-events: none; /* Let clicks pass through to parent */
 }
 
 .upload-prompt p {
     font-size: 18px;
     font-weight: 500;
+    pointer-events: none; /* Let clicks pass through to parent */
 }
 
 #mainCanvas {
