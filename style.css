@@ -148,9 +148,10 @@ body {
     height: auto;
     object-fit: contain;
     display: none;
+    z-index: 5;
 }
 
-#mainCanvas[width] {
+#mainCanvas.loaded {
     display: block;
 }
 
