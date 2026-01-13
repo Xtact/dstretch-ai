@@ -100,9 +100,10 @@ body {
     position: relative;
     cursor: pointer;
     padding: 0;
-    /* Ensure clicks work */
-    pointer-events: auto;
-    touch-action: manipulation;
+    background: #000;
+    /* CRITICAL: Make sure clicks work! */
+    pointer-events: auto !important;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .image-workspace.drag-over {
@@ -120,20 +121,25 @@ body {
     padding: 32px;
     cursor: pointer;
     user-select: none;
-    /* Make sure this is clickable */
-    pointer-events: auto;
+    /* CRITICAL: This must be clickable! */
+    pointer-events: auto !important;
     z-index: 10;
+    position: relative;
+}
+
+.upload-prompt svg,
+.upload-prompt p {
+    /* Allow parent to receive clicks */
+    pointer-events: none;
 }
 
 .upload-prompt svg {
     opacity: 0.5;
-    pointer-events: none; /* Let clicks pass through to parent */
 }
 
 .upload-prompt p {
     font-size: 18px;
     font-weight: 500;
-    pointer-events: none; /* Let clicks pass through to parent */
 }
 
 #mainCanvas {
