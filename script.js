@@ -352,32 +352,29 @@ class DStretchProPlus {
     }
 
     setupCanvas() {
-        const container = this.canvas.parentElement;
+        const container = document.getElementById('imageWorkspace');
         
-        // Get actual available space (accounting for any padding/margins)
         const containerWidth = container.clientWidth;
         const containerHeight = container.clientHeight;
         
-        // Calculate image aspect ratio
         const imgAspect = this.originalImage.width / this.originalImage.height;
         const containerAspect = containerWidth / containerHeight;
         
-        // Maximize canvas to fill container while maintaining aspect ratio
         if (imgAspect > containerAspect) {
-            // Image is wider - fit to width
             this.canvas.width = containerWidth;
             this.canvas.height = containerWidth / imgAspect;
         } else {
-            // Image is taller - fit to height
             this.canvas.height = containerHeight;
             this.canvas.width = containerHeight * imgAspect;
         }
         
-        console.log('Canvas sized:', this.canvas.width, 'x', this.canvas.height);
+        this.canvas.style.display = 'block';
     }
 
     drawCanvas() {
         if (!this.currentImage) return;
+
+        this.canvas.classList.add('loaded');
 
         const ctx = this.ctx;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
