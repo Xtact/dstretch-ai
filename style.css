@@ -75,6 +75,7 @@ body {
     display: flex;
     flex: 1;
     overflow: hidden;
+    min-height: 0; /* Important for flex child */
 }
 
 /* Canvas Area */
@@ -86,6 +87,8 @@ body {
     background: #000;
     position: relative;
     overflow: hidden;
+    min-width: 0; /* Important for flex child */
+    min-height: 0; /* Important for flex child */
 }
 
 .image-workspace {
@@ -96,6 +99,8 @@ body {
     justify-content: center;
     position: relative;
     cursor: pointer;
+    /* Remove any padding that might limit size */
+    padding: 0;
 }
 
 .image-workspace.drag-over {
@@ -111,6 +116,9 @@ body {
     color: #8e8e93;
     text-align: center;
     padding: 32px;
+    cursor: pointer;
+    user-select: none;
+    pointer-events: auto; /* Ensure it's clickable */
 }
 
 .upload-prompt svg {
@@ -119,11 +127,14 @@ body {
 
 .upload-prompt p {
     font-size: 18px;
+    font-weight: 500;
 }
 
 #mainCanvas {
     max-width: 100%;
     max-height: 100%;
+    width: auto;
+    height: auto;
     object-fit: contain;
     display: none;
 }
@@ -177,6 +188,7 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    flex-shrink: 0; /* Don't shrink the panel */
 }
 
 /* Tabs */
@@ -546,11 +558,12 @@ input[type="range"]::-moz-range-thumb {
         max-width: 100%;
         border-left: none;
         border-top: 1px solid #2c2c2e;
-        max-height: 50vh;
+        max-height: 45vh; /* Limit height on mobile to maximize image space */
     }
 
     .canvas-container {
-        min-height: 50vh;
+        min-height: 55vh; /* Maximize image viewing area on mobile */
+        flex: 1;
     }
 
     .app-header h1 {
@@ -560,12 +573,18 @@ input[type="range"]::-moz-range-thumb {
     .zoom-controls {
         bottom: 10px;
         right: 10px;
+        scale: 0.9;
     }
 
     .zoom-btn {
         width: 36px;
         height: 36px;
         font-size: 18px;
+    }
+    
+    .zoom-percent {
+        font-size: 12px;
+        min-width: 45px;
     }
 }
 
@@ -586,7 +605,7 @@ input[type="range"]::-moz-range-thumb {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(0, 122, 255, 0.9);
+    background: rgba(0, 122, 255, 0.95);
     color: #fff;
     padding: 12px 24px;
     border-radius: 20px;
@@ -594,9 +613,10 @@ input[type="range"]::-moz-range-thumb {
     font-weight: 600;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.2s;
+    transition: opacity 0.2s ease;
     z-index: 100;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 122, 255, 0.4);
+    backdrop-filter: blur(10px);
 }
 
 .comparison-overlay.active {
