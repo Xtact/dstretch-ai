@@ -54,39 +54,15 @@ class DStretchProPlus {
     }
 
     setupEventListeners() {
-        // === UPLOAD FUNCTIONALITY - ULTRA SIMPLE VERSION ===
         const imageInput = document.getElementById('imageInput');
-        const imageWorkspace = document.getElementById('imageWorkspace');
         const uploadPrompt = document.getElementById('uploadPrompt');
         
-        console.log('=== UPLOAD SETUP ===');
-        console.log('Input element:', imageInput);
-        console.log('Workspace element:', imageWorkspace);
-        console.log('Prompt element:', uploadPrompt);
-        
-        // Method 1: Direct click on upload prompt
-        uploadPrompt.onclick = function(e) {
-            console.log('PROMPT CLICKED!');
-            e.stopPropagation();
-            imageInput.click();
-        };
-        
-        // Method 2: Click on workspace
-        imageWorkspace.onclick = function(e) {
-            console.log('WORKSPACE CLICKED!');
-            if (e.target === imageWorkspace || e.target === uploadPrompt || e.target.parentElement === uploadPrompt) {
-                console.log('Valid target, opening file picker...');
-                imageInput.click();
-            }
-        };
-        
-        // File selected
         imageInput.onchange = (e) => {
-            console.log('FILE SELECTED!');
             const file = e.target.files[0];
             if (file) {
-                console.log('Loading:', file.name);
                 this.loadImage(file);
+                imageInput.style.display = 'none';
+                uploadPrompt.style.display = 'none';
             }
         };
 
@@ -347,24 +323,15 @@ class DStretchProPlus {
     }
 
     loadImage(file) {
-        console.log('=== LOAD IMAGE CALLED ===');
-        console.log('File:', file);
-        
-        // Hide upload prompt immediately
         const uploadPrompt = document.getElementById('uploadPrompt');
-        if (uploadPrompt) {
-            uploadPrompt.style.display = 'none';
-            console.log('Upload prompt hidden');
-        }
+        if (uploadPrompt) uploadPrompt.style.display = 'none';
         
         this.showLoading(true, 'Loading image...');
         
         const reader = new FileReader();
         reader.onload = (e) => {
-            console.log('File read complete');
             const img = new Image();
             img.onload = () => {
-                console.log('Image loaded:', img.width, 'x', img.height);
                 this.originalImage = img;
                 this.currentImage = img;
                 this.resetZoom();
@@ -375,18 +342,11 @@ class DStretchProPlus {
                 this.showLoading(false);
             };
             img.onerror = () => {
-                console.error('Failed to load image');
                 alert('Failed to load image');
                 this.showLoading(false);
                 if (uploadPrompt) uploadPrompt.style.display = 'flex';
             };
             img.src = e.target.result;
-        };
-        reader.onerror = () => {
-            console.error('Failed to read file');
-            alert('Failed to read file');
-            this.showLoading(false);
-            if (uploadPrompt) uploadPrompt.style.display = 'flex';
         };
         reader.readAsDataURL(file);
     }
