@@ -580,6 +580,39 @@ input[type="range"]::-moz-range-thumb {
     }
 }
 
+/* Comparison Overlay */
+.comparison-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 122, 255, 0.9);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 20px;
+    font-size: 16px;
+    font-weight: 600;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.comparison-overlay.active {
+    opacity: 1;
+}
+
+/* Zoom Percentage Display */
+.zoom-percent {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 0 8px;
+    min-width: 50px;
+    text-align: center;
+}
+
 /* Scrollbar styling */
 .panel-content::-webkit-scrollbar {
     width: 8px;
@@ -596,4 +629,30 @@ input[type="range"]::-moz-range-thumb {
 
 .panel-content::-webkit-scrollbar-thumb:hover {
     background: #48484a;
+}
+
+/* Performance optimizations */
+.image-workspace,
+.canvas-container,
+#mainCanvas {
+    will-change: transform;
+}
+
+/* Smooth transitions */
+.tab,
+.icon-btn,
+.primary-btn,
+.secondary-btn,
+.zoom-btn {
+    transition: all 0.2s ease;
+}
+
+/* Loading text animation */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.loading-overlay.active p {
+    animation: pulse 1.5s ease-in-out infinite;
 }
