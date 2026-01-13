@@ -324,7 +324,10 @@ class DStretchProPlus {
 
     loadImage(file) {
         const uploadPrompt = document.getElementById('uploadPrompt');
+        const imageInput = document.getElementById('imageInput');
+        
         if (uploadPrompt) uploadPrompt.style.display = 'none';
+        if (imageInput) imageInput.style.display = 'none';
         
         this.showLoading(true, 'Loading image...');
         
@@ -345,8 +348,15 @@ class DStretchProPlus {
                 alert('Failed to load image');
                 this.showLoading(false);
                 if (uploadPrompt) uploadPrompt.style.display = 'flex';
+                if (imageInput) imageInput.style.display = 'block';
             };
             img.src = e.target.result;
+        };
+        reader.onerror = () => {
+            alert('Failed to read file');
+            this.showLoading(false);
+            if (uploadPrompt) uploadPrompt.style.display = 'flex';
+            if (imageInput) imageInput.style.display = 'block';
         };
         reader.readAsDataURL(file);
     }
