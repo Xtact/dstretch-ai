@@ -54,46 +54,41 @@ class DStretchProPlus {
     }
 
     setupEventListeners() {
-        // === UPLOAD FUNCTIONALITY - COMPLETELY REWRITTEN ===
-        const imageWorkspace = document.getElementById('imageWorkspace');
+        // === UPLOAD FUNCTIONALITY - ULTRA SIMPLE VERSION ===
         const imageInput = document.getElementById('imageInput');
-        const uploadPrompt = document.querySelector('.upload-prompt');
+        const imageWorkspace = document.getElementById('imageWorkspace');
+        const uploadPrompt = document.getElementById('uploadPrompt');
         
-        console.log('Setting up upload listeners...');
-        console.log('Workspace:', imageWorkspace);
-        console.log('Input:', imageInput);
-        console.log('Prompt:', uploadPrompt);
+        console.log('=== UPLOAD SETUP ===');
+        console.log('Input element:', imageInput);
+        console.log('Workspace element:', imageWorkspace);
+        console.log('Prompt element:', uploadPrompt);
         
-        // Simple direct click handler on the entire workspace
-        imageWorkspace.addEventListener('click', (e) => {
-            console.log('Workspace clicked!', e.target);
-            if (!this.originalImage) {
-                console.log('No image loaded, triggering file input...');
+        // Method 1: Direct click on upload prompt
+        uploadPrompt.onclick = function(e) {
+            console.log('PROMPT CLICKED!');
+            e.stopPropagation();
+            imageInput.click();
+        };
+        
+        // Method 2: Click on workspace
+        imageWorkspace.onclick = function(e) {
+            console.log('WORKSPACE CLICKED!');
+            if (e.target === imageWorkspace || e.target === uploadPrompt || e.target.parentElement === uploadPrompt) {
+                console.log('Valid target, opening file picker...');
                 imageInput.click();
             }
-        }, true); // Use capture phase
+        };
         
-        // Also add to upload prompt as backup
-        if (uploadPrompt) {
-            uploadPrompt.addEventListener('click', (e) => {
-                console.log('Upload prompt clicked!');
-                if (!this.originalImage) {
-                    e.stopPropagation();
-                    imageInput.click();
-                }
-            });
-        }
-        
-        // File input change
-        imageInput.addEventListener('change', (e) => {
-            console.log('File input changed!');
+        // File selected
+        imageInput.onchange = (e) => {
+            console.log('FILE SELECTED!');
             const file = e.target.files[0];
             if (file) {
-                console.log('Loading file:', file.name);
+                console.log('Loading:', file.name);
                 this.loadImage(file);
-                e.target.value = ''; // Reset for re-upload
             }
-        });
+        };
 
         // Drag and drop
         imageWorkspace.addEventListener('dragover', (e) => {
@@ -352,12 +347,24 @@ class DStretchProPlus {
     }
 
     loadImage(file) {
+        console.log('=== LOAD IMAGE CALLED ===');
+        console.log('File:', file);
+        
+        // Hide upload prompt immediately
+        const uploadPrompt = document.getElementById('uploadPrompt');
+        if (uploadPrompt) {
+            uploadPrompt.style.display = 'none';
+            console.log('Upload prompt hidden');
+        }
+        
         this.showLoading(true, 'Loading image...');
         
         const reader = new FileReader();
         reader.onload = (e) => {
+            console.log('File read complete');
             const img = new Image();
             img.onload = () => {
+                console.log('Image loaded:', img.width, 'x', img.height);
                 this.originalImage = img;
                 this.currentImage = img;
                 this.resetZoom();
@@ -366,13 +373,20 @@ class DStretchProPlus {
                 this.saveState();
                 this.updateUIState();
                 this.showLoading(false);
-                console.log('Image loaded:', img.width, 'x', img.height);
             };
             img.onerror = () => {
+                console.error('Failed to load image');
                 alert('Failed to load image');
                 this.showLoading(false);
+                if (uploadPrompt) uploadPrompt.style.display = 'flex';
             };
             img.src = e.target.result;
+        };
+        reader.onerror = () => {
+            console.error('Failed to read file');
+            alert('Failed to read file');
+            this.showLoading(false);
+            if (uploadPrompt) uploadPrompt.style.display = 'flex';
         };
         reader.readAsDataURL(file);
     }
