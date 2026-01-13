@@ -32,15 +32,15 @@
         <main class="main-content">
             <!-- Canvas Area -->
             <div class="canvas-container">
+                <input type="file" id="imageInput" accept="image/*" style="display: none;">
                 <div id="imageWorkspace" class="image-workspace">
-                    <div class="upload-prompt">
+                    <div id="uploadPrompt" class="upload-prompt">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
                         <p>Tap to Upload Image</p>
-                        <input type="file" id="imageInput" accept="image/*" style="display: none;">
                     </div>
                     <canvas id="mainCanvas"></canvas>
                     
