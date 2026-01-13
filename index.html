@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DStretch Pro Plus+</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.7.0/math.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -12,13 +13,13 @@
         <header class="app-header">
             <h1>DStretch Pro Plus+</h1>
             <div class="header-controls">
-                <button id="undoBtn" class="icon-btn" disabled>
+                <button id="undoBtn" class="icon-btn" disabled title="Undo">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 7v6h6"></path>
                         <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"></path>
                     </svg>
                 </button>
-                <button id="redoBtn" class="icon-btn" disabled>
+                <button id="redoBtn" class="icon-btn" disabled title="Redo">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 7v6h-6"></path>
                         <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"></path>
@@ -42,13 +43,19 @@
                         <input type="file" id="imageInput" accept="image/*" style="display: none;">
                     </div>
                     <canvas id="mainCanvas"></canvas>
+                    
+                    <!-- Comparison Overlay -->
+                    <div id="comparisonOverlay" class="comparison-overlay">
+                        <span>Original</span>
+                    </div>
                 </div>
                 
                 <!-- Zoom Controls -->
                 <div id="zoomControls" class="zoom-controls" style="display: none;">
-                    <button id="zoomInBtn" class="zoom-btn">+</button>
-                    <button id="zoomOutBtn" class="zoom-btn">−</button>
-                    <button id="resetZoomBtn" class="zoom-btn">⟲</button>
+                    <button id="zoomInBtn" class="zoom-btn" title="Zoom In">+</button>
+                    <span id="zoomPercent" class="zoom-percent">100%</span>
+                    <button id="zoomOutBtn" class="zoom-btn" title="Zoom Out">−</button>
+                    <button id="resetZoomBtn" class="zoom-btn" title="Reset Zoom">⟲</button>
                 </div>
             </div>
 
@@ -59,6 +66,7 @@
                     <button class="tab active" data-panel="enhance">Enhance</button>
                     <button class="tab" data-panel="adjust">Adjust</button>
                     <button class="tab" data-panel="advanced">Advanced</button>
+                    <button class="tab" data-panel="tools">Tools</button>
                 </div>
 
                 <!-- Panel Content -->
@@ -75,12 +83,28 @@
                         <div class="control-group">
                             <label for="colorspace">Colorspace:</label>
                             <select id="colorspace">
+                                <option value="rgb">RGB (Red-Green-Blue)</option>
+                                <option value="lab">LAB (Lightness-A-B)</option>
+                                <option value="lch">LCH (Lightness-Chroma-Hue)</option>
                                 <option value="yre">YRE (Yellow-Red Enhancement)</option>
                                 <option value="yye">YYE (Yellow Enhancement)</option>
-                                <option value="crgb">CRGB (Color RGB)</option>
                                 <option value="lre">LRE (Lab Red Enhancement)</option>
+                                <option value="crgb">CRGB (Color RGB)</option>
+                                <option value="ybk">YBK (Yellow-Blue-Black)</option>
                                 <option value="lds">LDS (Lab Desaturation)</option>
                             </select>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>DStretch Amount: <span id="dstretchAmountValue">100</span>%</label>
+                            <input type="range" id="dstretchAmount" min="0" max="100" value="100">
+                        </div>
+
+                        <div class="control-group">
+                            <label class="toggle-label">
+                                <input type="checkbox" id="icaToggle">
+                                <span>Use ICA (Independent Component Analysis)</span>
+                            </label>
                         </div>
 
                         <button id="autoEnhanceBtn" class="primary-btn">
@@ -94,22 +118,37 @@
                     <!-- Adjust Panel -->
                     <div id="adjustPanel" class="panel">
                         <div class="slider-control">
-                            <label for="exposure">Exposure: <span id="exposureValue">0</span></label>
+                            <label>Exposure: <span id="exposureValue">0</span></label>
                             <input type="range" id="exposure" min="-100" max="100" value="0">
                         </div>
                         
                         <div class="slider-control">
-                            <label for="contrast">Contrast: <span id="contrastValue">0</span></label>
+                            <label>Brightness: <span id="brightnessValue">0</span></label>
+                            <input type="range" id="brightness" min="-100" max="100" value="0">
+                        </div>
+                        
+                        <div class="slider-control">
+                            <label>Shadows: <span id="shadowsValue">0</span></label>
+                            <input type="range" id="shadows" min="0" max="100" value="0">
+                        </div>
+                        
+                        <div class="slider-control">
+                            <label>Contrast: <span id="contrastValue">0</span></label>
                             <input type="range" id="contrast" min="-100" max="100" value="0">
                         </div>
                         
                         <div class="slider-control">
-                            <label for="saturation">Saturation: <span id="saturationValue">0</span></label>
+                            <label>Black Point: <span id="blackPointValue">0</span></label>
+                            <input type="range" id="blackPoint" min="0" max="50" value="0">
+                        </div>
+                        
+                        <div class="slider-control">
+                            <label>Saturation: <span id="saturationValue">0</span></label>
                             <input type="range" id="saturation" min="-100" max="100" value="0">
                         </div>
                         
                         <div class="slider-control">
-                            <label for="sharpness">Sharpness: <span id="sharpnessValue">0</span></label>
+                            <label>Sharpen: <span id="sharpnessValue">0</span></label>
                             <input type="range" id="sharpness" min="0" max="100" value="0">
                         </div>
 
@@ -118,6 +157,46 @@
 
                     <!-- Advanced Panel -->
                     <div id="advancedPanel" class="panel">
+                        <div class="slider-control">
+                            <label>Decorrelation Stretch: <span id="decorrelationValue">0</span>%</label>
+                            <input type="range" id="decorrelation" min="0" max="100" value="0">
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Normal Map Strength: <span id="normalMapValue">0</span>%</label>
+                            <input type="range" id="normalMap" min="0" max="100" value="0">
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Virtual Light Angle: <span id="lightAngleValue">45</span>°</label>
+                            <input type="range" id="lightAngle" min="0" max="360" value="45">
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Light Intensity: <span id="lightIntensityValue">50</span>%</label>
+                            <input type="range" id="lightIntensity" min="0" max="100" value="50">
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Edge Detection: <span id="edgeStrengthValue">0</span>%</label>
+                            <input type="range" id="edgeStrength" min="0" max="100" value="0">
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Edge Thickness: <span id="edgeThicknessValue">1</span>px</label>
+                            <input type="range" id="edgeThickness" min="1" max="5" value="1">
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Directional Sharpen: <span id="directionalSharpenValue">0</span>%</label>
+                            <input type="range" id="directionalSharpen" min="0" max="100" value="0">
+                        </div>
+
+                        <button id="resetAdvanced" class="secondary-btn">Reset Advanced</button>
+                    </div>
+
+                    <!-- Tools Panel -->
+                    <div id="toolsPanel" class="panel">
                         <div class="control-group">
                             <button id="cameraBtn" class="primary-btn">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -140,8 +219,11 @@
                         </div>
 
                         <div class="info-section">
-                            <h3>About DStretch</h3>
-                            <p>DStretch is a specialized image enhancement tool designed for rock art documentation and analysis.</p>
+                            <h3>About DStretch Pro Plus+</h3>
+                            <p>Professional petroglyph and rock art enhancement tool combining traditional DStretch colorspace algorithms with advanced computational photography techniques.</p>
+                            <p style="margin-top: 8px; font-size: 12px; color: #666;">
+                                <strong>Tip:</strong> Press and hold on the image to compare with the original.
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -169,7 +251,7 @@
         <!-- Loading Overlay -->
         <div id="loadingOverlay" class="loading-overlay">
             <div class="spinner"></div>
-            <p>Processing...</p>
+            <p id="loadingText">Processing...</p>
         </div>
     </div>
 
