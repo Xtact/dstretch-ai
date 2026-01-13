@@ -54,56 +54,70 @@ class DStretchProPlus {
     }
 
     setupEventListeners() {
-        // Upload functionality - FIXED
+        // === UPLOAD FUNCTIONALITY - COMPLETELY REWRITTEN ===
         const imageWorkspace = document.getElementById('imageWorkspace');
         const imageInput = document.getElementById('imageInput');
-        const uploadPrompt = imageWorkspace.querySelector('.upload-prompt');
+        const uploadPrompt = document.querySelector('.upload-prompt');
         
-        // Click on workspace or upload prompt to upload
-        const triggerUpload = (e) => {
+        console.log('Setting up upload listeners...');
+        console.log('Workspace:', imageWorkspace);
+        console.log('Input:', imageInput);
+        console.log('Prompt:', uploadPrompt);
+        
+        // Simple direct click handler on the entire workspace
+        imageWorkspace.addEventListener('click', (e) => {
+            console.log('Workspace clicked!', e.target);
             if (!this.originalImage) {
-                e.preventDefault();
-                e.stopPropagation();
+                console.log('No image loaded, triggering file input...');
                 imageInput.click();
             }
-        };
+        }, true); // Use capture phase
         
-        imageWorkspace.addEventListener('click', triggerUpload);
+        // Also add to upload prompt as backup
         if (uploadPrompt) {
-            uploadPrompt.addEventListener('click', triggerUpload);
+            uploadPrompt.addEventListener('click', (e) => {
+                console.log('Upload prompt clicked!');
+                if (!this.originalImage) {
+                    e.stopPropagation();
+                    imageInput.click();
+                }
+            });
         }
         
+        // File input change
         imageInput.addEventListener('change', (e) => {
+            console.log('File input changed!');
             const file = e.target.files[0];
             if (file) {
+                console.log('Loading file:', file.name);
                 this.loadImage(file);
-                // Reset input to allow uploading same file again
-                e.target.value = '';
+                e.target.value = ''; // Reset for re-upload
             }
         });
 
         // Drag and drop
         imageWorkspace.addEventListener('dragover', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             imageWorkspace.classList.add('drag-over');
         });
 
         imageWorkspace.addEventListener('dragleave', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             imageWorkspace.classList.remove('drag-over');
         });
 
         imageWorkspace.addEventListener('drop', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             imageWorkspace.classList.remove('drag-over');
             const file = e.dataTransfer.files[0];
             if (file && file.type.startsWith('image/')) {
+                console.log('File dropped:', file.name);
                 this.loadImage(file);
             }
         });
-
-        // Tap and hold comparison
-        this.setupComparisonHandlers();
 
         // Navigation tabs
         document.querySelectorAll('.tab').forEach(tab => {
@@ -173,6 +187,9 @@ class DStretchProPlus {
 
         // Pan functionality
         this.setupPanHandlers();
+        
+        // Tap and hold comparison (setup AFTER other handlers)
+        this.setupComparisonHandlers();
 
         // Camera modal
         document.getElementById('closeCameraBtn').addEventListener('click', () => this.closeCamera());
@@ -196,32 +213,38 @@ class DStretchProPlus {
         const workspace = document.getElementById('imageWorkspace');
         const overlay = document.getElementById('comparisonOverlay');
 
-        // Mouse events
+        // Mouse events - ONLY when image is loaded
         workspace.addEventListener('mousedown', (e) => {
             if (this.originalImage && !this.isPanning && e.button === 0) {
+                e.stopPropagation(); // Prevent other handlers
                 this.compareTimeout = setTimeout(() => {
                     this.showOriginal();
                 }, 500);
             }
         });
 
-        workspace.addEventListener('mouseup', () => {
-            clearTimeout(this.compareTimeout);
-            if (this.isComparing) {
-                this.hideOriginal();
+        workspace.addEventListener('mouseup', (e) => {
+            if (this.originalImage) {
+                clearTimeout(this.compareTimeout);
+                if (this.isComparing) {
+                    this.hideOriginal();
+                }
             }
         });
 
         workspace.addEventListener('mouseleave', () => {
-            clearTimeout(this.compareTimeout);
-            if (this.isComparing) {
-                this.hideOriginal();
+            if (this.originalImage) {
+                clearTimeout(this.compareTimeout);
+                if (this.isComparing) {
+                    this.hideOriginal();
+                }
             }
         });
 
-        // Touch events
+        // Touch events - ONLY when image is loaded
         workspace.addEventListener('touchstart', (e) => {
             if (this.originalImage && e.touches.length === 1) {
+                e.stopPropagation(); // Prevent other handlers
                 this.compareTimeout = setTimeout(() => {
                     this.showOriginal();
                 }, 500);
@@ -229,9 +252,11 @@ class DStretchProPlus {
         });
 
         workspace.addEventListener('touchend', () => {
-            clearTimeout(this.compareTimeout);
-            if (this.isComparing) {
-                this.hideOriginal();
+            if (this.originalImage) {
+                clearTimeout(this.compareTimeout);
+                if (this.isComparing) {
+                    this.hideOriginal();
+                }
             }
         });
     }
