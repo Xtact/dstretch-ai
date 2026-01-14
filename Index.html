@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upload Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #000; color: #fff; height: 100vh; display: flex; flex-direction: column; }
+        .container { flex: 1; display: flex; align-items: center; justify-center; background: #111; }
+        .upload-box { width: 80%; max-width: 600px; aspect-ratio: 16/9; border: 3px dashed #444; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+        .upload-box:hover { border-color: #0af; }
+        .upload-text { font-size: 24px; color: #888; }
+        canvas { max-width: 100%; max-height: 100%; display: none; }
+        input[type="file"] { display: none; }
+        .controls { padding: 20px; background: #222; display: flex; gap: 10px; justify-content: center; }
+        button { padding: 10px 20px; background: #0af; border: none; color: #fff; cursor: pointer; font-size: 16px; border-radius: 5px; }
+        button:hover { background: #09d; }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <label for="fileInput" class="upload-box" id="uploadBox">
+            <div class="upload-text" id="uploadText">📸 CLICK HERE TO UPLOAD IMAGE</div>
+            <input type="file" id="fileInput" accept="image/*">
+            <canvas id="canvas"></canvas>
+        </label>
+    </div>
+    <div class="controls">
+        <button id="downloadBtn" disabled>Download</button>
+        <button id="resetBtn" disabled>Reset</button>
+    </div>
+
+    <script>
+        console.log('Script starting...');
+        
+        const fileInput = document.getElementById('fileInput');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const uploadText = document.getElementById('uploadText');
+        const uploadBox = document.getElementById('uploadBox');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        
+        let currentImage = null;
+
+        fileInput.addEventListener('change', function(e) {
+            console.log('File input changed!');
+            const file = e.target.files[0];
+            if (!file) {
+                console.log('No file selected');
+                return;
+            }
+            console.log('File:', file.name, file.type, file.size);
+            loadImage(file);
+        });
+
+        function loadImage(file) {
+            console.log('Loading image...');
+            uploadText.textContent = 'Loading...';
+            
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                console.log('File read, creating image...');
+                const img = new Image();
+                
+                img.onload = function() {
+                    console.log('Image loaded! Size:', img.width, 'x', img.height);
+                    currentImage = img;
+                    
+                    // Size canvas
+                    const boxWidth = uploadBox.clientWidth;
+                    const boxHeight = uploadBox.clientHeight;
+                    const imgRatio = img.width / img.height;
+                    const boxRatio = boxWidth / boxHeight;
+                    
+                    if (imgRatio > boxRatio) {
+                        canvas.width = boxWidth;
+                        canvas.height = boxWidth / imgRatio;
+                    } else {
+                        canvas.height = boxHeight;
+                        canvas.width = boxHeight * imgRatio;
+                    }
+                    
+                    console.log('Canvas sized:', canvas.width, 'x', canvas.height);
+                    
+                    // Draw image
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    // Show canvas
+                    canvas.style.display = 'block';
+                    uploadText.style.display = 'none';
+                    downloadBtn.disabled = false;
+                    resetBtn.disabled = false;
+                    
+                    console.log('Image displayed successfully!');
+                };
+                
+                img.onerror = function() {
+                    console.error('Image failed to load');
+                    alert('Failed to load image');
+                    uploadText.textContent = '❌ ERROR - Try another image';
+                };
+                
+                img.src = e.target.result;
+            };
+            
+            reader.onerror = function() {
+                console.error('FileReader error');
+                alert('Failed to read file');
+                uploadText.textContent = '❌ ERROR - Try another file';
+            };
+            
+            reader.readAsDataURL(file);
+        }
+
+        downloadBtn.addEventListener('click', function() {
+            if (canvas.width > 0) {
+                const link = document.createElement('a');
+                link.download = 'image-' + Date.now() + '.png';
+                link.href = canvas.toDataURL();
+                link.click();
+                console.log('Download triggered');
+            }
+        });
+
+        resetBtn.addEventListener('click', function() {
+            canvas.style.display = 'none';
+            uploadText.style.display = 'block';
+            uploadText.textContent = '📸 CLICK HERE TO UPLOAD IMAGE';
+            downloadBtn.disabled = true;
+            resetBtn.disabled = true;
+            fileInput.value = '';
+            currentImage = null;
+            console.log('Reset complete');
+        });
+
+        console.log('Script loaded successfully');
+    </script>
+</body>
+</html>
